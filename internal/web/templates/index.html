@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{{if .Status.Name}}{{.Status.Name}}{{else}}Tesla Hub{{end}}</title>
+<script src="https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js"></script>
+<style>
+  :root {
+    --bg: #f4f5f7; --card: #ffffff; --ink: #14161a; --muted: #6b7280; --faint: #9ca3af; --line: #e5e7eb; --soft: #f1f2f4;
+    --accent: #2563eb; --green: #16a34a; --amber: #d97706; --red: #dc2626; --blue: #0284c7; --violet: #7c3aed;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0b0c0e; --card: #15171a; --ink: #f3f4f6; --muted: #9ca3af; --faint: #6b7280; --line: #24272c; --soft: #1d2024;
+      --accent: #4f83f1; --green: #22c55e; --amber: #f59e0b; --red: #f87171; --blue: #38bdf8; --violet: #a78bfa; color-scheme: dark; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
+  a { color: var(--accent); text-decoration: none; }
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 24px 20px 80px; }
+  .grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 16px; margin-bottom: 16px; }
+  .grid > * { grid-column: span 12; min-width: 0; }
+  @media (min-width: 900px) {
+    .s3 { grid-column: span 3; } .s4 { grid-column: span 4; } .s5 { grid-column: span 5; } .s6 { grid-column: span 6; }
+    .s7 { grid-column: span 7; } .s8 { grid-column: span 8; }
+  }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; }
+  .card h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 14px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .card h2 .btn { text-transform: none; letter-spacing: 0; }
+  .card h2 small { text-transform: none; letter-spacing: 0; font-weight: 400; }
+  .muted { color: var(--muted); } .faint { color: var(--faint); }
+
+  /* header */
+  .head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 12px; margin-bottom: 20px; }
+  .head h1 { margin: 0; font-size: 26px; font-weight: 650; letter-spacing: -.02em; }
+  .state { font-size: 15px; margin-top: 4px; }
+  .badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; background: var(--soft); font-size: 12.5px; color: var(--muted); }
+  .badge::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
+  .badge.fresh::before, .badge.online::before { background: var(--green); }
+  .badge.stale::before { background: var(--amber); } .badge.old::before { background: var(--red); }
+  .head-right { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+  /* buttons */
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--line); background: var(--card); color: var(--ink);
+    border-radius: 9px; padding: 9px 14px; font: inherit; font-weight: 550; cursor: pointer; white-space: nowrap; }
+  .btn:hover { background: var(--soft); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primary:hover { filter: brightness(1.08); }
+  .btn.small { padding: 5px 10px; font-size: 13px; }
+  .btn.htmx-request { opacity: .55; pointer-events: none; }
+  .btns { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; }
+
+  /* stat tiles */
+  .tiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 16px; }
+  @media (min-width: 900px) { .tiles { grid-template-columns: repeat(4, 1fr); } }
+  .tile { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
+  .tile .k { color: var(--muted); font-size: 12.5px; }
+  .tile .v { font-size: 26px; font-weight: 650; letter-spacing: -.02em; font-variant-numeric: tabular-nums; margin-top: 2px; }
+  .tile .v small { font-size: 14px; font-weight: 500; color: var(--muted); margin-left: 2px; }
+  .tile .d { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+  .meter { height: 6px; border-radius: 3px; background: var(--soft); margin-top: 8px; position: relative; overflow: hidden; }
+  .meter i { position: absolute; inset: 0 auto 0 0; background: var(--green); border-radius: 3px; }
+  .meter.low i { background: var(--red); }
+
+  /* charts */
+  .chart { position: relative; }
+  .chart svg { display: block; width: 100%; height: 150px; }
+  .chart path { fill: none; stroke-width: 2.2; vector-effect: non-scaling-stroke; stroke-linejoin: round; stroke-linecap: round; }
+  .chart line.grid { stroke: var(--line); stroke-width: 1; vector-effect: non-scaling-stroke; }
+  .s-battery { stroke: var(--green); } .s-inside { stroke: var(--amber); } .s-outside { stroke: var(--blue); } .s-speed { stroke: var(--violet); }
+  .yl { position: absolute; left: 0; font-size: 11px; color: var(--faint); background: var(--card); padding-right: 4px; }
+  .yl.top { top: -2px; } .yl.bot { bottom: -2px; }
+  .xl { display: flex; justify-content: space-between; font-size: 11px; color: var(--faint); margin-top: 6px; }
+  .legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); font-weight: 400; text-transform: none; letter-spacing: 0; }
+  .legend span::before { content: ""; display: inline-block; width: 10px; height: 3px; border-radius: 2px; margin-right: 5px; vertical-align: 3px; background: currentColor; }
+  .legend .s-battery { color: var(--green); } .legend .s-inside { color: var(--amber); } .legend .s-outside { color: var(--blue); } .legend .s-speed { color: var(--violet); }
+  .legend span { color: var(--muted); } .legend span.s-battery::before { background: var(--green); } .legend span.s-inside::before { background: var(--amber); }
+  .legend span.s-outside::before { background: var(--blue); } .legend span.s-speed::before { background: var(--violet); }
+  .seg { display: inline-flex; background: var(--soft); border-radius: 8px; padding: 2px; }
+  .seg a { padding: 4px 10px; border-radius: 6px; color: var(--muted); font-size: 12.5px; text-transform: none; letter-spacing: 0; font-weight: 500; }
+  .seg a.on { background: var(--card); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  .nochart { height: 150px; display: grid; place-items: center; color: var(--faint); font-size: 13px; text-transform: none; }
+
+  /* departures */
+  .leave { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .leave form { display: flex; gap: 6px; }
+  input[type=time], input[type=number], input[type=text] { font: inherit; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--line); background: var(--card); color: var(--ink); }
+  .plan { background: var(--soft); border-radius: 10px; padding: 12px 14px; margin: 14px 0 0; font-size: 13.5px; }
+  .plan b { font-weight: 600; }
+  .notice { border-left: 3px solid var(--accent); }
+  .list { margin-top: 12px; }
+  .item { display: flex; gap: 12px; align-items: flex-start; padding: 10px 0; border-top: 1px solid var(--line); font-size: 13.5px; }
+  .item .t { font-weight: 600; font-variant-numeric: tabular-nums; min-width: 4.8em; }
+  .item .body { flex: 1; min-width: 0; }
+  .pill { display: inline-block; font-size: 11.5px; padding: 1px 8px; border-radius: 999px; background: var(--soft); color: var(--muted); margin-left: 6px; }
+  .pill.done { color: var(--green); } .pill.failed, .pill.missed { color: var(--red); } .pill.pending, .pill.running { color: var(--accent); }
+
+  /* weather */
+  .wx-now { display: flex; align-items: baseline; gap: 12px; }
+  .wx-now .v { font-size: 40px; font-weight: 650; letter-spacing: -.03em; }
+  .hours { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-top: 14px; text-align: center; font-size: 12px; }
+  .hours div { background: var(--soft); border-radius: 9px; padding: 8px 2px; }
+  .hours b { display: block; font-size: 15px; margin: 2px 0; }
+
+  /* location */
+  .map { width: 100%; height: 210px; border: 0; border-radius: 10px; background: var(--soft); display: block; }
+  @media (prefers-color-scheme: dark) { .map { filter: invert(.9) hue-rotate(180deg) saturate(.5); } }
+
+  /* controls */
+  .climate { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+  .group { margin-top: 14px; } .group > div:first-child { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+  label.check { display: inline-flex; gap: 6px; align-items: center; font-size: 13.5px; }
+
+  /* schedules */
+  .sched { display: flex; align-items: center; gap: 14px; padding: 12px 0; border-top: 1px solid var(--line); }
+  .sched .t { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; min-width: 3.4em; }
+  .sched .body { flex: 1; min-width: 0; } .sched.off .t, .sched.off .body { opacity: .45; }
+  .switch { width: 40px; height: 24px; border-radius: 12px; border: 0; background: var(--line); position: relative; cursor: pointer; flex: none; }
+  .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform .15s; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
+  .switch.on { background: var(--green); } .switch.on::after { transform: translateX(16px); }
+  details.add { margin-top: 10px; } details.add > summary { cursor: pointer; color: var(--accent); font-weight: 550; padding: 8px 0; list-style: none; }
+  .form { display: grid; gap: 12px; padding-top: 6px; }
+  .form .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .form .row > label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+  .days { display: flex; gap: 4px; }
+  .days label { position: relative; }
+  .days input { position: absolute; opacity: 0; inset: 0; cursor: pointer; }
+  .days span { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--soft); color: var(--muted); font-size: 12.5px; font-weight: 600; }
+  .days input:checked + span { background: var(--accent); color: #fff; }
+
+  /* setup / empty state */
+  .empty { border: 1px dashed var(--line); background: var(--card); border-radius: 14px; padding: 22px; margin-bottom: 16px; }
+  .empty h3 { margin: 0 0 4px; font-size: 18px; }
+  .steps { list-style: none; padding: 0; margin: 14px 0 0; display: grid; gap: 10px; }
+  .steps li { display: flex; gap: 12px; align-items: flex-start; }
+  .steps .n { width: 24px; height: 24px; flex: none; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; background: var(--soft); color: var(--muted); }
+  .steps li.done .n { background: var(--green); color: #fff; }
+  .steps li.done .txt { color: var(--muted); text-decoration: line-through; }
+  code { background: var(--soft); padding: 2px 6px; border-radius: 5px; font-size: 12.5px; overflow-wrap: anywhere; }
+
+  .usage { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .usage b { display: block; font-size: 20px; font-variant-numeric: tabular-nums; }
+  .usage span { font-size: 12px; color: var(--muted); }
+
+  #toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 10; max-width: calc(100% - 32px); }
+  .msg { background: var(--ink); color: var(--bg); padding: 11px 18px; border-radius: 10px; font-size: 13.5px; box-shadow: 0 10px 30px rgba(0,0,0,.25); animation: toast 5s forwards; }
+  .msg.err { background: var(--red); color: #fff; animation-duration: 9s; }
+  @keyframes toast { 0% { opacity: 0; transform: translateY(8px); } 6%, 85% { opacity: 1; transform: none; } 100% { opacity: 0; visibility: hidden; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="head" id="top" hx-get="/?range={{.Range}}" hx-select="#top" hx-swap="outerHTML" hx-trigger="every 60s, commandDone from:body delay:5s">
+    <div>
+      <h1>{{if .Status.Name}}{{.Status.Name}}{{else}}Your Tesla{{end}}</h1>
+      <div class="state">
+        {{with .Latest}}{{if .Driving}}Driving{{if .SpeedKmh}} at {{num .SpeedKmh 0}} km/h{{end}}{{else if .Charging}}Charging{{if .ChargerPowerKW}} at {{num .ChargerPowerKW 0}} kW{{end}}{{else}}Parked{{end}}{{if yes .ClimateOn}} · climate on{{end}}{{else}}{{if .Connected}}Waiting for the first reading{{else}}Not connected{{end}}{{end}}
+      </div>
+    </div>
+    <div class="head-right">
+      {{if .Status.State}}<span class="badge {{.Status.State}}">Car {{.Status.State}}</span>{{end}}
+      {{with .Latest}}<span class="badge {{fresh .Time}}" title="When the car last reported. The hub polls every few minutes while the car is awake, and lets it sleep otherwise.">Data from {{clock .Time}} · {{ago .Time}}</span>{{end}}
+      <button class="btn small" hx-post="/refresh" hx-target="#toast">Refresh</button>
+      <a class="btn small" href="http://localhost:3095" target="_blank">Full charts</a>
+    </div>
+    {{if .Status.LastErr}}<div class="muted" style="width:100%;color:var(--red)">Last check failed: {{.Status.LastErr}}</div>{{end}}
+  </header>
+
+  {{if not .Latest}}
+  <section class="empty">
+    <h3>No data from the car yet</h3>
+    <div class="muted">Stats, charts and weather show up once the car reports in. To get there:</div>
+    <ol class="steps">
+      <li class="{{if .Connected}}done{{end}}"><span class="n">1</span><div class="txt">Connect your Tesla account {{if not .Connected}}<a class="btn small primary" href="/auth/login" style="margin-left:6px">Connect</a>{{end}}</div></li>
+      <li><span class="n">2</span><div class="txt">Pair the key: open <code>https://tesla.com/_ak/{{.Domain}}</code> on your phone and tap your key card in the car when asked</div></li>
+      <li><span class="n">3</span><div class="txt">Wake the car by opening the Tesla app, then press <b>Refresh</b> above</div></li>
+    </ol>
+  </section>
+  {{end}}
+
+  {{if .Latest}}
+  <section id="stats" hx-get="/?range={{.Range}}" hx-select="#stats" hx-swap="outerHTML" hx-trigger="every 60s, commandDone from:body delay:5s">
+    {{with .Latest}}
+    <div class="tiles">
+      <div class="tile"><div class="k">Battery</div><div class="v">{{int .BatteryLevel}}<small>%</small></div>
+        <div class="meter {{if lt (pct .BatteryLevel) 20}}low{{end}}"><i style="width:{{pct .BatteryLevel}}%"></i></div>
+        <div class="d">Limit {{int .ChargeLimit}}%</div></div>
+      <div class="tile"><div class="k">Range</div><div class="v">{{num .RangeKm 0}}<small>km</small></div><div class="d">estimated</div></div>
+      <div class="tile"><div class="k">Cabin</div><div class="v">{{num .InsideTempC 0}}<small>°C</small></div><div class="d">{{if yes .ClimateOn}}Climate on, set {{num .DriverTempSetting 0}}°{{else}}Climate off{{end}}</div></div>
+      <div class="tile"><div class="k">Outside</div><div class="v">{{if $.Weather}}{{printf "%.0f" $.Weather.TempC}}{{else}}{{num .OutsideTempC 0}}{{end}}<small>°C</small></div><div class="d">{{if $.Weather}}{{$.Weather.Summary}}{{else}}car sensor{{end}}</div></div>
+      <div class="tile"><div class="k">Charging</div><div class="v" style="font-size:20px;padding:4px 0 2px">{{if .ChargingState}}{{.ChargingState}}{{else}}—{{end}}</div><div class="d">{{if .Charging}}{{num .ChargerPowerKW 0}} kW{{else}}not plugged in or idle{{end}}</div></div>
+      <div class="tile"><div class="k">Security</div><div class="v" style="font-size:20px;padding:4px 0 2px">{{if yes .Locked}}Locked{{else}}Unlocked{{end}}</div><div class="d">Sentry {{if yes .Sentry}}on{{else}}off{{end}}</div></div>
+      <div class="tile"><div class="k">Driven today</div><div class="v">{{num $.TodayKm 1}}<small>km</small></div><div class="d">from odometer readings</div></div>
+      <div class="tile"><div class="k">Odometer</div><div class="v">{{num .OdometerKm 0}}<small>km</small></div><div class="d">{{if .CarVersion}}software {{.CarVersion}}{{end}}</div></div>
+    </div>
+    {{end}}
+  </section>
+  {{end}}
+
+  <div class="grid">
+    <section class="card s7">{{template "departures" .}}</section>
+    <section class="card s5">
+      <h2>Weather {{with .Weather}}<small class="faint">at the car · Open-Meteo</small>{{end}}</h2>
+      {{with .Weather}}
+      <div class="wx-now"><span class="v">{{printf "%.0f" .TempC}}°</span><span><b>{{.Summary}}</b><br><span class="muted">Feels like {{printf "%.0f" .FeelsLikeC}}° · wind {{printf "%.0f" .WindKmh}} km/h</span></span></div>
+      <div class="hours">
+        {{range $i, $h := .Hours}}{{if and (lt $i 12) (eq (mod $i 2) 0)}}<div><span class="muted">{{hour $h.Time}}</span><b>{{printf "%.0f" $h.TempC}}°</b><span class="muted">{{if ge $h.PrecipProb 20}}{{$h.PrecipProb}}% 💧{{else}}{{sky $h.Code}}{{end}}</span></div>{{end}}{{end}}
+      </div>
+      {{else}}<div class="nochart">Shows up once the car reports its location.</div>{{end}}
+    </section>
+  </div>
+
+  {{if .Latest}}
+  <section id="live" hx-get="/?range={{.Range}}" hx-select="#live" hx-swap="outerHTML" hx-trigger="every 60s, commandDone from:body delay:5s">
+    <div class="grid">
+      <div class="card s6">
+        <h2>Battery <span class="seg"><a href="/?range=24h" class="{{if eq .Range "24h"}}on{{end}}">24 h</a><a href="/?range=7d" class="{{if eq .Range "7d"}}on{{end}}">7 days</a></span></h2>
+        {{template "chart" .Battery}}
+      </div>
+      <div class="card s6">
+        <h2>Temperature <span class="legend">{{range .Temps.Legend}}<span class="{{.Class}}">{{.Name}}</span>{{end}}</span></h2>
+        {{template "chart" .Temps}}
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card s8">
+        <h2>Speed <small class="faint">only recorded while driving (every {{.DrivingEvery}})</small></h2>
+        {{template "chart" .Speed}}
+      </div>
+      <div class="card s4">
+        <h2>Location {{with .Latest}}{{if .Latitude}}<a class="btn small" target="_blank" href="https://maps.apple.com/?ll={{num .Latitude 6}},{{num .Longitude 6}}&q=My%20car">Open in Maps</a>{{end}}{{end}}</h2>
+        {{with .Latest}}{{if .Latitude}}
+        <iframe class="map" loading="lazy" title="Car location"
+          src="https://www.openstreetmap.org/export/embed.html?bbox={{lon .Longitude -0.008}}%2C{{lat .Latitude -0.004}}%2C{{lon .Longitude 0.008}}%2C{{lat .Latitude 0.004}}&layer=mapnik&marker={{num .Latitude 6}}%2C{{num .Longitude 6}}"></iframe>
+        <div class="muted" style="margin-top:8px;font-size:12.5px">{{num .Latitude 5}}, {{num .Longitude 5}} · as of {{clock .Time}}</div>
+        {{else}}<div class="nochart">No location. Approve "Vehicle Location" when connecting.</div>{{end}}{{end}}
+      </div>
+    </div>
+  </section>
+  {{end}}
+
+  <div class="grid">
+    <section class="card s5">
+      <h2>Controls <small class="faint">wakes the car if needed (up to a minute)</small></h2>
+      <form class="climate" hx-post="/climate/on" hx-target="#toast" hx-disabled-elt="find button">
+        <input type="number" name="temp_c" value="21" min="15" max="28" step="0.5" style="width:5.5em" aria-label="Temperature °C"> °C
+        <label class="check"><input type="checkbox" name="seat_heat"> Seat heat</label>
+        <label class="check"><input type="checkbox" name="steering_heat"> Wheel heat</label>
+        <button class="btn primary">Climate on</button>
+        <button type="button" class="btn" hx-post="/climate/off" hx-target="#toast">Off</button>
+      </form>
+      <div class="group"><div>Doors & alarm</div>
+        <div class="btns">
+          <button class="btn" hx-post="/cmd/lock" hx-target="#toast">Lock</button>
+          <button class="btn" hx-post="/cmd/unlock" hx-target="#toast" hx-confirm="Unlock the car?">Unlock</button>
+          <button class="btn" hx-post="/cmd/sentry_on" hx-target="#toast">Sentry on</button>
+          <button class="btn" hx-post="/cmd/sentry_off" hx-target="#toast">Sentry off</button>
+          <button class="btn" hx-post="/cmd/flash" hx-target="#toast">Flash lights</button>
+          <button class="btn" hx-post="/cmd/honk" hx-target="#toast">Honk</button>
+        </div></div>
+      <div class="group"><div>Charging</div>
+        <div class="btns">
+          <button class="btn" hx-post="/cmd/charge_start" hx-target="#toast">Start</button>
+          <button class="btn" hx-post="/cmd/charge_stop" hx-target="#toast">Stop</button>
+          <button class="btn" hx-post="/cmd/port_open" hx-target="#toast">Open port</button>
+          <button class="btn" hx-post="/cmd/port_close" hx-target="#toast">Close port</button>
+        </div></div>
+    </section>
+    <section class="card s7">{{template "rules" .}}</section>
+  </div>
+
+  <div class="grid">
+    <section class="card s8">
+      <h2>API usage this month <small class="faint">Tesla bills per request · $10/month is free</small></h2>
+      <div class="usage">
+        <div><b>{{index .Usage "data"}}</b><span>data requests</span></div>
+        <div><b>{{index .Usage "command"}}</b><span>commands</span></div>
+        <div><b>{{index .Usage "wake"}}</b><span>wake-ups</span></div>
+        <div><b>${{printf "%.2f" .UsageCost}}</b><span>estimated (polling pauses at {{.Budget}} requests)</span></div>
+      </div>
+    </section>
+    <section class="card s4">
+      <h2>Account</h2>
+      {{if .Connected}}<div class="muted" style="margin-bottom:10px">Connected{{if .Status.VIN}} · VIN {{.Status.VIN}}{{end}}</div>
+      <form method="post" action="/auth/logout"><button class="btn small">Disconnect</button></form>
+      {{else}}<a class="btn primary" href="/auth/login">Connect Tesla account</a>{{end}}
+    </section>
+  </div>
+</div>
+
+<div id="toast" aria-live="polite">
+  {{if .Flash}}<div class="msg">{{.Flash}}</div>{{end}}
+  {{if .Error}}<div class="msg err">{{.Error}}</div>{{end}}
+</div>
+</body>
+</html>
+
+{{define "chart"}}
+{{if .HasData}}
+<div class="chart">{{.SVG}}<span class="yl top">{{.Top}}</span><span class="yl bot">{{.Bottom}}</span></div>
+<div class="xl">{{range .XLabels}}<span>{{.}}</span>{{end}}</div>
+{{else}}<div class="nochart">No readings in this period yet</div>{{end}}
+{{end}}
+
+{{define "departures"}}
+<div id="departures">
+  <h2>Leaving soon? <small class="faint">picks heat or cool from the weather</small></h2>
+  <div class="leave">
+    <button class="btn primary" hx-post="/depart" hx-vals='{"minutes":"0"}' hx-target="#departures" hx-swap="outerHTML">Now</button>
+    <button class="btn" hx-post="/depart" hx-vals='{"minutes":"10"}' hx-target="#departures" hx-swap="outerHTML">In 10 min</button>
+    <button class="btn" hx-post="/depart" hx-vals='{"minutes":"20"}' hx-target="#departures" hx-swap="outerHTML">In 20 min</button>
+    <button class="btn" hx-post="/depart" hx-vals='{"minutes":"30"}' hx-target="#departures" hx-swap="outerHTML">In 30 min</button>
+    <form hx-post="/depart" hx-target="#departures" hx-swap="outerHTML"><input type="time" name="at" required aria-label="Departure time"><button class="btn">Set</button></form>
+  </div>
+  {{if .Notice}}<div class="plan notice">{{.Notice}}</div>
+  {{else if .Preview}}<div class="plan"><b>If you left in 15 min:</b> {{.Preview.Reason}}</div>{{end}}
+  {{if .Departures}}
+  <div class="list">
+    {{range .Departures}}
+    <div class="item">
+      <div class="t">{{clock .DepartAt}}</div>
+      <div class="body">{{.Reason}}<span class="pill {{.Status}}">{{.Status}}</span>{{if .Message}}<div class="faint">{{.Message}}</div>{{end}}</div>
+      {{if eq .Status "pending"}}<button class="btn small" hx-delete="/departures/{{.ID}}" hx-target="#departures" hx-swap="outerHTML">Cancel</button>{{end}}
+    </div>
+    {{end}}
+  </div>
+  {{end}}
+</div>
+{{end}}
+
+{{define "rules"}}
+<div id="rules">
+  <h2>Schedules <small class="faint">repeat preheats</small></h2>
+  {{range .Rules}}
+  <div class="sched {{if not .Enabled}}off{{end}}">
+    <div class="t">{{.AtTime}}</div>
+    <div class="body"><div><b>{{.Name}}</b></div>
+      <div class="muted">{{days .Days}} · {{.TempC}}°{{if .RadiusM}} · only within {{km .RadiusM}} of the saved spot{{end}}{{if .MaxOutsideTempC}} · only below {{f .MaxOutsideTempC}}°{{end}}{{if .SeatHeat}} · seat{{end}}{{if .SteeringHeat}} · wheel{{end}}</div></div>
+    <button class="switch {{if .Enabled}}on{{end}}" aria-label="On/off" hx-post="/rules/{{.ID}}/toggle" hx-vals='{"enabled":"{{if .Enabled}}false{{else}}true{{end}}"}' hx-target="#rules" hx-swap="outerHTML"></button>
+    <button class="btn small" hx-delete="/rules/{{.ID}}" hx-confirm="Delete {{.Name}}?" hx-target="#rules" hx-swap="outerHTML">Delete</button>
+  </div>
+  {{else}}<div class="muted">No schedules yet. Add one to preheat on a routine, e.g. weekday mornings.</div>{{end}}
+
+  <details class="add">
+    <summary>+ Add a schedule</summary>
+    <form class="form" hx-post="/rules" hx-target="#rules" hx-swap="outerHTML">
+      <div class="row">
+        <label>Name<input type="text" name="name" placeholder="Work mornings"></label>
+        <label>Start at<input type="time" name="at_time" value="07:30" required></label>
+        <label>Temp °C<input type="number" name="temp_c" value="21" min="15" max="28" step="0.5" style="width:5.5em"></label>
+      </div>
+      <div class="days">
+        <label><input type="checkbox" name="days" value="1" checked><span>M</span></label>
+        <label><input type="checkbox" name="days" value="2" checked><span>T</span></label>
+        <label><input type="checkbox" name="days" value="3" checked><span>W</span></label>
+        <label><input type="checkbox" name="days" value="4" checked><span>T</span></label>
+        <label><input type="checkbox" name="days" value="5" checked><span>F</span></label>
+        <label><input type="checkbox" name="days" value="6"><span>S</span></label>
+        <label><input type="checkbox" name="days" value="0"><span>S</span></label>
+      </div>
+      <div class="row">
+        <label class="check" style="flex-direction:row"><input type="checkbox" name="use_geofence" {{with .Latest}}{{if .Latitude}}checked{{end}}{{end}}> Only if the car is within</label>
+        <input type="number" name="radius_m" value="200" min="20" style="width:6em" aria-label="Radius in metres"> m of
+        <input type="text" name="latitude" value="{{with .Latest}}{{num .Latitude 5}}{{end}}" placeholder="lat" style="width:7.5em" aria-label="Latitude">
+        <input type="text" name="longitude" value="{{with .Latest}}{{num .Longitude 5}}{{end}}" placeholder="lon" style="width:7.5em" aria-label="Longitude">
+      </div>
+      <div class="row">
+        <label class="check" style="flex-direction:row"><input type="checkbox" name="use_max_temp"> Only if it's colder than</label>
+        <input type="number" name="max_outside_temp_c" value="10" step="0.5" style="width:5.5em" aria-label="Max outside °C"> °C
+      </div>
+      <div class="row">
+        <label class="check" style="flex-direction:row"><input type="checkbox" name="seat_heat"> Seat heat</label>
+        <label class="check" style="flex-direction:row"><input type="checkbox" name="steering_heat"> Wheel heat</label>
+        <button class="btn primary">Save schedule</button>
+      </div>
+      <div class="faint" style="font-size:12px">The location is prefilled with where the car is now.</div>
+    </form>
+  </details>
+
+  {{if .Runs}}
+  <div class="list">
+    {{range .Runs}}<div class="item"><div class="t">{{clock .RanAt}}</div><div class="body">{{.RuleName}}<span class="pill {{.Status}}">{{.Status}}</span>{{if .Message}}<div class="faint">{{.Message}}</div>{{end}}</div></div>{{end}}
+  </div>
+  {{end}}
+</div>
+{{end}}

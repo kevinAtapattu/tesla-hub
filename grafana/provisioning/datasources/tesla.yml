@@ -1,0 +1,15 @@
+apiVersion: 1
+datasources:
+  - name: Tesla
+    uid: tesla-db
+    type: grafana-postgresql-datasource
+    url: db:5432
+    user: tesla
+    isDefault: true
+    jsonData:
+      database: tesla
+      sslmode: disable
+      postgresVersion: 1600
+      timescaledb: false
+    secureJsonData:
+      password: tesla
