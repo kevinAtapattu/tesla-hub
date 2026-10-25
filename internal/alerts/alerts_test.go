@@ -1,8 +1,15 @@
 package alerts
 
 import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/kevin/tesla-hub/internal/telemetry"
 )
 
 func f(v float64) *float64 { return &v }
@@ -47,5 +54,56 @@ func TestDetectorSeededMidDrive(t *testing.T) {
 	d.Seed("D", t0.Add(-3*time.Second))
 	if d.Observe(t0, "", f(70)) {
 		t.Error("alerted after a restart mid-drive")
+	}
+}
+
+func TestMessage(t *testing.T) {
+	soc := 71.4
+	if got, want := Message("Home", &soc, Every), "🚗 The car started driving to Home, battery 71%."; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+	if got, want := Message("", nil, Every), "🚗 The car started driving."; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+type memStore struct{ s Settings }
+
+func (m *memStore) GetSetting(_ context.Context, _ string, v any) (bool, error) {
+	*(v.(*Settings)) = m.s
+	return true, nil
+}
+func (m *memStore) SetSetting(_ context.Context, _ string, v any) error {
+	m.s = v.(Settings)
+	return nil
+}
+func (m *memStore) DriveState(context.Context, string, time.Time) (string, time.Time, error) {
+	return "P", time.Now().Add(-time.Hour), nil
+}
+
+func TestAlertWaitsForDestination(t *testing.T) {
+	var got []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var b struct{ Content string }
+		json.NewDecoder(r.Body).Decode(&b)
+		got = append(got, b.Content)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+	st := &memStore{s: Settings{Mode: Next}}
+	w := &Watcher{Store: st, Webhook: srv.URL}
+	w.init()
+	ctx := context.Background()
+	now := time.Now()
+	w.handle(ctx, &telemetry.Point{VIN: "V", Time: now, Gear: "D", Data: map[string]any{}})
+	if len(got) != 0 {
+		t.Fatalf("sent before the destination could arrive: %q", got)
+	}
+	w.handle(ctx, &telemetry.Point{VIN: "V", Time: now.Add(2 * time.Second), Data: map[string]any{"DestinationName": "Home"}})
+	if len(got) != 1 || !strings.Contains(got[0], "started driving to Home") {
+		t.Fatalf("got %q", got)
+	}
+	if st.s.Mode != Off {
+		t.Errorf("next-drive mode should turn off after the alert, got %q", st.s.Mode)
 	}
 }

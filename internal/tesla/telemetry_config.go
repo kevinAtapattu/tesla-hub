@@ -40,6 +40,7 @@ func TelemetryFields() map[string]TelemetryField {
 		"EstBatteryRange":          {IntervalSeconds: 60},
 		"InsideTemp":               {IntervalSeconds: 60},
 		"OutsideTemp":              {IntervalSeconds: 120},
+		"DestinationName":          {IntervalSeconds: 1}, // for drive alerts: "started driving to Home"
 	}
 }
 

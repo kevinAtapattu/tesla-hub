@@ -87,14 +87,23 @@ type Watcher struct {
 	Store     Store
 	Webhook   string // Discord webhook URL
 	MentionID string // Discord user ID to @mention, so the phone notifies
-	Location  *time.Location
 	Client    *http.Client
 	OnStart   func() // called when a drive starts, whether or not alerts are on
 
-	once      sync.Once
-	ch        chan *telemetry.Point
-	detectors map[string]*Detector
-	soc       map[string]float64
+	once sync.Once
+	ch   chan *telemetry.Point
+	cars map[string]*car
+}
+
+// destWait is how long an alert waits for the navigation destination when the
+// car starts driving before it's known; it usually follows within seconds.
+const destWait = 30 * time.Second
+
+type car struct {
+	Detector
+	soc     *float64
+	dest    string    // navigation destination name, "" when none
+	pending time.Time // a drive started at this time and its alert hasn't gone yet
 }
 
 // Observe queues a record without blocking the telemetry feed.
@@ -110,19 +119,26 @@ func (w *Watcher) Observe(p *telemetry.Point) {
 func (w *Watcher) init() {
 	w.once.Do(func() {
 		w.ch = make(chan *telemetry.Point, 1000)
-		w.detectors = map[string]*Detector{}
-		w.soc = map[string]float64{}
+		w.cars = map[string]*car{}
 	})
 }
 
 func (w *Watcher) Run(ctx context.Context) {
 	w.init()
+	tick := time.NewTicker(5 * time.Second)
+	defer tick.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case p := <-w.ch:
 			w.handle(ctx, p)
+		case now := <-tick.C:
+			for _, c := range w.cars {
+				if !c.pending.IsZero() && now.Sub(c.pending) >= destWait {
+					w.alert(ctx, c)
+				}
+			}
 		}
 	}
 }
@@ -131,42 +147,60 @@ func (w *Watcher) handle(ctx context.Context, p *telemetry.Point) {
 	if p.Resend {
 		return
 	}
-	if p.Soc != nil {
-		w.soc[p.VIN] = *p.Soc
-	}
-	d := w.detectors[p.VIN]
-	if d == nil {
-		d = &Detector{}
+	c := w.cars[p.VIN]
+	if c == nil {
+		c = &car{}
 		gear, last, err := w.Store.DriveState(ctx, p.VIN, p.Time)
 		if err != nil {
 			slog.Warn("drive alerts: load state", "err", err)
 		}
-		d.Seed(gear, last)
-		w.detectors[p.VIN] = d
+		c.Seed(gear, last)
+		w.cars[p.VIN] = c
 	}
-	if !d.Observe(p.Time, p.Gear, p.SpeedKmh) || time.Since(p.Time) > stale {
-		return
+	if p.Soc != nil {
+		c.soc = p.Soc
 	}
-	if w.OnStart != nil {
-		w.OnStart()
+	if v, ok := p.Data["DestinationName"]; ok {
+		c.dest, _ = v.(string) // nil when the route is cleared
 	}
+	if c.Observe(p.Time, p.Gear, p.SpeedKmh) && time.Since(p.Time) <= stale {
+		if w.OnStart != nil {
+			w.OnStart()
+		}
+		c.pending = p.Time
+	}
+	if !c.pending.IsZero() && c.dest != "" {
+		w.alert(ctx, c)
+	}
+}
+
+// Message is the alert text for a drive that just started.
+func Message(dest string, soc *float64, mode string) string {
+	msg := "🚗 The car started driving"
+	if dest != "" {
+		msg += " to " + dest
+	}
+	if soc != nil {
+		msg += fmt.Sprintf(", battery %.0f%%", math.Round(*soc))
+	}
+	msg += "."
+	if mode == Next {
+		msg += " Drive alerts are off again until you turn them back on."
+	}
+	return msg
+}
+
+func (w *Watcher) alert(ctx context.Context, c *car) {
+	c.pending = time.Time{}
 	s, err := w.Settings(ctx)
 	if err != nil || s.Mode == Off {
 		return
 	}
-	msg := "🚗 The car started driving at " + p.Time.In(w.Location).Format("3:04 PM")
-	if soc, ok := w.soc[p.VIN]; ok {
-		msg += fmt.Sprintf(", battery %.0f%%", math.Round(soc))
-	}
-	msg += "."
-	if s.Mode == Next {
-		msg += " Drive alerts are off again until you turn them back on."
-	}
-	if err := w.Send(ctx, msg); err != nil {
+	if err := w.Send(ctx, Message(c.dest, c.soc, s.Mode)); err != nil {
 		slog.Error("drive alert", "err", err)
 		return
 	}
-	slog.Info("drive alert sent", "mode", s.Mode)
+	slog.Info("drive alert sent", "mode", s.Mode, "destination", c.dest != "")
 	s.LastAt = time.Now()
 	if s.Mode == Next {
 		s.Mode = Off
