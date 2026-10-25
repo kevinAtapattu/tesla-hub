@@ -7,6 +7,7 @@ import (
 )
 
 func f(v float64) *float64 { return &v }
+func b(v bool) *bool       { return &v }
 
 func TestMake(t *testing.T) {
 	now := time.Date(2026, 1, 15, 7, 0, 0, 0, time.UTC)
@@ -35,6 +36,20 @@ func TestMake(t *testing.T) {
 			Heat, 22, true, true, now.Add(time.Hour - 14*time.Minute), ""},
 		{"no data still heats", Input{Now: now, Departure: in20},
 			Heat, 21, false, false, in20.Add(-6 * time.Minute), "No temperature data"},
+
+		// Preferences and explicit requests (what the assistant passes in).
+		{"likes it warm", Input{Now: now, Departure: in20, OutsideC: f(3), CabinC: f(8), Prefs: Prefs{WarmC: 23, CoolC: 20, HeatBelowC: 12, CoolAboveC: 24, SeatHeatBelowC: 8}},
+			Heat, 23, true, false, in20.Add(-11 * time.Minute), "Heating to 23°"},
+		{"asked to warm on a hot day cools instead", Input{Now: now, Departure: in20, OutsideC: f(28), CabinC: f(33), Want: Heat},
+			Cool, 20, false, false, in20.Add(-10 * time.Minute), "instead of heating"},
+		{"asked to warm on a mild day still warms", Input{Now: now, Departure: in20, OutsideC: f(16), CabinC: f(17), Want: Heat},
+			Heat, 21, false, false, in20.Add(-5 * time.Minute), "Heating to 21°"},
+		{"asked to cool on a cold day does nothing", Input{Now: now, Departure: in20, OutsideC: f(2), Want: Cool},
+			None, 21, false, false, in20, "No cooling needed"},
+		{"explicit temperature and no seat heat", Input{Now: now, Departure: in20, OutsideC: f(-5), CabinC: f(-2), TempC: f(25), SeatHeat: b(false)},
+			Heat, 25, false, true, in20.Add(-20 * time.Minute), "Heating to 25°"},
+		{"explicit temperature is clamped", Input{Now: now, Departure: in20, OutsideC: f(-5), TempC: f(35)},
+			Heat, 28, true, true, in20.Add(-20 * time.Minute), "28°"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

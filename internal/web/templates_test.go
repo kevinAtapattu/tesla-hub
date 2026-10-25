@@ -34,7 +34,7 @@ func TestTemplatesRender(t *testing.T) {
 				t.Fatalf("data %d page %s: %v", i, page, err)
 			}
 		}
-		for _, name := range []string{"departures", "rules"} {
+		for _, name := range []string{"departures", "rules", "assistant-log"} {
 			var sb strings.Builder
 			if err := tmpl.ExecuteTemplate(&sb, name, d); err != nil {
 				t.Fatalf("data %d partial %s: %v", i, name, err)

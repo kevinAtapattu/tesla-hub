@@ -32,6 +32,47 @@
     </ol>
   </div>
 
+  <div class="card span2" id="assistant">
+    <h2 class="card-title">Assistant
+      {{if .AssistantOn}}<span class="pill green"><span class="dot green"></span>Ready</span>{{else}}<span class="pill amber">Needs an API key</span>{{end}}</h2>
+    <p class="muted" style="margin:-4px 0 16px">Send a message like "warm it up, I'll be there in 15". Claude reads it and the hub picks the temperature from the weather and your preferences below.</p>
+    {{if not .AssistantOn}}
+    <div class="callout" style="margin:0 0 16px">Add <code>ANTHROPIC_API_KEY=...</code> to the hub's <code>.env</code> file, then restart the hub.</div>
+    {{end}}
+    {{template "assistant-log" .}}
+    <div class="divider"></div>
+    <details>
+      <summary class="sub-title" style="cursor:pointer;margin:0">Connect your iPhone Shortcut</summary>
+      <div class="rows" style="margin-top:12px">
+        <div class="row"><span>URL</span><span class="mono">{{.AssistantURL}}</span></div>
+        <div class="row"><span>Method</span><span class="mono">POST</span></div>
+        <div class="row"><span>Header</span><span class="mono" style="overflow-wrap:anywhere">Authorization: Bearer {{.AssistantToken}}</span></div>
+        <div class="row"><span>Body (JSON)</span><span class="mono">{"message": "&lt;what you said&gt;"}</span></div>
+        <div class="row"><span>Model</span><span class="mono">{{if .AssistantModel}}{{.AssistantModel}}{{else}}—{{end}}</span></div>
+        <div class="row"><span>Lost the phone or shared the token?</span>
+          <form method="post" action="/assistant/token" onsubmit="return confirm('Make a new token? The old one stops working.')"><button class="btn sm">New token</button></form></div>
+      </div>
+    </details>
+  </div>
+
+  <div class="card span2">
+    <h2 class="card-title">Comfort preferences</h2>
+    <form method="post" action="/settings/prefs" style="display:grid;gap:20px">
+      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
+        <label class="field">Warm the car to °C<input type="number" name="warm_c" value="{{.Prefs.WarmC}}" min="15" max="28" step="0.5"></label>
+        <label class="field">Cool the car to °C<input type="number" name="cool_c" value="{{.Prefs.CoolC}}" min="15" max="28" step="0.5"></label>
+        <label class="field">Heat when it's below °C<input type="number" name="heat_below_c" value="{{.Prefs.HeatBelowC}}" step="0.5"></label>
+        <label class="field">Cool when it's above °C<input type="number" name="cool_above_c" value="{{.Prefs.CoolAboveC}}" step="0.5"></label>
+        <label class="field">Seat heat below °C<input type="number" name="seat_heat_below_c" value="{{.Prefs.SeatHeatBelowC}}" step="0.5"></label>
+        <label class="field">Wheel heat below °C<input type="number" name="wheel_heat_below_c" value="{{.Prefs.WheelHeatBelowC}}" step="0.5"></label>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+        <span class="muted" style="font-size:13px">Used by "Leaving soon" and the assistant. Below 0° outside it heats one degree warmer.</span>
+        <button class="btn primary">Save preferences</button>
+      </div>
+    </form>
+  </div>
+
   <div class="card span2">
     <h2 class="card-title">API usage this month <span class="muted" style="font-size:12px">Tesla bills per request · the first $10 each month is free</span></h2>
     <div class="grid g4">
@@ -52,5 +93,25 @@
       <div class="row"><span>Appearance</span><button class="btn sm" onclick="theme.toggle()"><span class="show-dark">Use light mode</span><span class="show-light">Use dark mode</span></button></div>
     </div>
   </div>
+</div>
+{{end}}
+
+{{define "assistant-log"}}
+<div id="assistant-log">
+  <form hx-post="/assistant/try" hx-target="#assistant-log" hx-swap="outerHTML" hx-disabled-elt="find button" style="display:flex;gap:8px">
+    <input type="text" name="message" placeholder="Try it: warm it up, I'll be there in 15" style="flex:1" aria-label="Message to the assistant" {{if not .AssistantOn}}disabled{{end}}>
+    <button class="btn primary" {{if not .AssistantOn}}disabled{{end}}>
+      <svg class="i spin" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.22-8.56"/></svg>Send</button>
+  </form>
+  {{if .AssistantLog}}
+  <div class="rows" style="margin-top:16px">
+    {{range .AssistantLog}}
+    <div style="padding-top:12px;border-top:1px solid var(--line);font-size:14px">
+      <div style="display:flex;justify-content:space-between;gap:12px"><span style="font-weight:500">“{{.Message}}”</span><span class="muted num" style="font-size:12px;white-space:nowrap">{{ago .Time}}</span></div>
+      {{if .Error}}<div style="color:var(--red-ink);margin-top:2px">Failed: {{.Error}}</div>{{else}}<div class="muted" style="margin-top:2px">{{.Reply}}</div>{{end}}
+    </div>
+    {{end}}
+  </div>
+  {{end}}
 </div>
 {{end}}

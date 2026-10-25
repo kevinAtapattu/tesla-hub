@@ -93,3 +93,19 @@ CREATE TABLE IF NOT EXISTS departures (
     created_at    timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS departures_pending ON departures (start_at) WHERE status = 'pending';
+
+-- Small key/value settings: comfort preferences, the assistant's access token.
+CREATE TABLE IF NOT EXISTS settings (
+    key        text PRIMARY KEY,
+    value      jsonb NOT NULL,
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+-- Every message sent to the assistant (e.g. from Siri) and what it replied.
+CREATE TABLE IF NOT EXISTS assistant_log (
+    id       bigserial PRIMARY KEY,
+    time     timestamptz NOT NULL DEFAULT now(),
+    message  text NOT NULL,
+    reply    text NOT NULL DEFAULT '',
+    error    text NOT NULL DEFAULT ''
+);

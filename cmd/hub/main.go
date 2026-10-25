@@ -20,6 +20,7 @@ import (
 	"time"
 	_ "time/tzdata" // so TZ works in a minimal container
 
+	"github.com/kevin/tesla-hub/internal/assistant"
 	"github.com/kevin/tesla-hub/internal/config"
 	"github.com/kevin/tesla-hub/internal/poller"
 	"github.com/kevin/tesla-hub/internal/rules"
@@ -87,9 +88,14 @@ func serve(ctx context.Context, cfg *config.Config) error {
 	go p.Run(ctx)
 	go sched.Run(ctx)
 
+	dash := &web.Server{Cfg: cfg, Auth: auth, Store: st, Poller: p, Commander: commander, Weather: &weather.Client{}, RunScheduler: sched.Nudge}
+	dash.Assistant = assistant.New(cfg.AnthropicAPIKey, cfg.AssistantModel, dash.AssistantActions(), cfg.Location)
+	if dash.Assistant == nil {
+		slog.Info("assistant off: set ANTHROPIC_API_KEY to enable it")
+	}
 	srv := &http.Server{
 		Addr:              cfg.ListenAddr,
-		Handler:           (&web.Server{Cfg: cfg, Auth: auth, Store: st, Poller: p, Commander: commander, Weather: &weather.Client{}, RunScheduler: sched.Nudge}).Handler(),
+		Handler:           dash.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	go func() {

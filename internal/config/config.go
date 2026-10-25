@@ -31,6 +31,9 @@ type Config struct {
 	ChargingInterval   time.Duration
 	ParkedInterval     time.Duration // parked but awake; after one sample we back off so it can sleep
 	MonthlyBudget      int           // max billable requests per calendar month before throttling
+
+	AnthropicAPIKey string // enables the assistant ("warm it up, I'll be there in 15")
+	AssistantModel  string
 }
 
 func Load() (*Config, error) {
@@ -57,6 +60,8 @@ func Load() (*Config, error) {
 		ChargingInterval:   envDuration("POLL_CHARGING", 5*time.Minute),
 		ParkedInterval:     envDuration("POLL_PARKED", 20*time.Minute),
 		MonthlyBudget:      envInt("MONTHLY_REQUEST_BUDGET", 4000),
+		AnthropicAPIKey:    os.Getenv("ANTHROPIC_API_KEY"),
+		AssistantModel:     env("ASSISTANT_MODEL", "claude-opus-5-5"),
 	}
 	if c.Region != "na" && c.Region != "eu" {
 		return nil, fmt.Errorf("TESLA_REGION must be na or eu, got %q", c.Region)

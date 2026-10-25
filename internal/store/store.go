@@ -4,6 +4,7 @@ package store
 import (
 	"context"
 	_ "embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -376,4 +377,67 @@ func (s *Store) FinishDeparture(ctx context.Context, id int, status, message str
 func (s *Store) CancelDeparture(ctx context.Context, id int) error {
 	_, err := s.db.Exec(ctx, `UPDATE departures SET status = 'cancelled' WHERE id = $1 AND status = 'pending'`, id)
 	return err
+}
+
+// CancelPendingDepartures cancels every plan that hasn't started and returns how many.
+func (s *Store) CancelPendingDepartures(ctx context.Context) (int, error) {
+	tag, err := s.db.Exec(ctx, `UPDATE departures SET status = 'cancelled' WHERE status = 'pending'`)
+	return int(tag.RowsAffected()), err
+}
+
+// --- settings ---
+
+// GetSetting decodes the setting into v. It reports false when the key isn't set.
+func (s *Store) GetSetting(ctx context.Context, key string, v any) (bool, error) {
+	var raw []byte
+	err := s.db.QueryRow(ctx, `SELECT value FROM settings WHERE key = $1`, key).Scan(&raw)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, json.Unmarshal(raw, v)
+}
+
+func (s *Store) SetSetting(ctx context.Context, key string, v any) error {
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.Exec(ctx, `
+		INSERT INTO settings (key, value) VALUES ($1, $2)
+		ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`, key, raw)
+	return err
+}
+
+// --- assistant log ---
+
+type AssistantEntry struct {
+	Time    time.Time
+	Message string
+	Reply   string
+	Error   string
+}
+
+func (s *Store) LogAssistant(ctx context.Context, e AssistantEntry) error {
+	_, err := s.db.Exec(ctx, `INSERT INTO assistant_log (message, reply, error) VALUES ($1, $2, $3)`, e.Message, e.Reply, e.Error)
+	return err
+}
+
+func (s *Store) RecentAssistant(ctx context.Context, limit int) ([]AssistantEntry, error) {
+	rows, err := s.db.Query(ctx, `SELECT time, message, reply, error FROM assistant_log ORDER BY id DESC LIMIT $1`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []AssistantEntry
+	for rows.Next() {
+		var e AssistantEntry
+		if err := rows.Scan(&e.Time, &e.Message, &e.Reply, &e.Error); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
 }

@@ -18,6 +18,7 @@ import (
 
 	"github.com/teslamotors/vehicle-command/pkg/protocol"
 
+	"github.com/kevin/tesla-hub/internal/assistant"
 	"github.com/kevin/tesla-hub/internal/config"
 	"github.com/kevin/tesla-hub/internal/planner"
 	"github.com/kevin/tesla-hub/internal/poller"
@@ -38,6 +39,8 @@ type Server struct {
 	Weather   *weather.Client
 	// RunScheduler asks the scheduler to check for due departures right away.
 	RunScheduler func()
+	// Assistant answers messages like "warm it up, I'll be there in 15". Nil without an API key.
+	Assistant *assistant.Assistant
 
 	tmpl *template.Template
 }
@@ -63,6 +66,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /rules/{id}", s.deleteRule)
 	mux.HandleFunc("POST /depart", s.depart)
 	mux.HandleFunc("DELETE /departures/{id}", s.cancelDeparture)
+	mux.HandleFunc("POST /assistant", s.assistantAPI) // the phone; checks its own token
+	mux.HandleFunc("POST /assistant/try", s.assistantTry)
+	mux.HandleFunc("POST /assistant/token", s.newToken)
+	mux.HandleFunc("POST /settings/prefs", s.savePrefs)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("ok")) })
 	return s.basicAuth(mux)
 }
@@ -75,7 +82,7 @@ func (s *Server) basicAuth(next http.Handler) http.Handler {
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, pw, ok := r.BasicAuth()
-		if r.URL.Path == "/auth/callback" || r.URL.Path == "/healthz" ||
+		if r.URL.Path == "/auth/callback" || r.URL.Path == "/healthz" || r.URL.Path == "/assistant" ||
 			(ok && subtle.ConstantTimeCompare([]byte(pw), []byte(s.Cfg.DashboardPassword)) == 1) {
 			next.ServeHTTP(w, r)
 			return
@@ -109,16 +116,23 @@ type pageData struct {
 	Flash     string
 	Error     string
 
-	Now        time.Time
-	Range      string // chart window: "24h" or "7d"
-	Weather    *weather.Report
-	Preview    *planner.Plan // what "leaving in 15 min" would do right now
-	Departures []store.Departure
-	Notice     string // result of the last "leaving" request
-	TodayKm    *float64
-	Battery    chart
-	Temps      chart
-	Speed      chart
+	Now            time.Time
+	Range          string // chart window: "24h" or "7d"
+	Weather        *weather.Report
+	Preview        *planner.Plan // what "leaving in 15 min" would do right now
+	Departures     []store.Departure
+	Notice         string // result of the last "leaving" request
+	TodayKm        *float64
+	Battery        chart
+	Temps          chart
+	Speed          chart
+	Prefs          planner.Prefs
+	AssistantOn    bool
+	AssistantModel string
+	AssistantURL   string
+	AssistantToken string
+	AssistantLog   []store.AssistantEntry
+
 	// DrivingEvery is the poll interval while driving, shown so the speed chart isn't mistaken for live data.
 	DrivingEvery string
 }
@@ -138,6 +152,14 @@ func (s *Server) data(ctx context.Context, rangeParam string) pageData {
 	d.Rules, _ = s.Store.ListRules(ctx)
 	d.Runs, _ = s.Store.RecentRuns(ctx, 8)
 	d.Departures, _ = s.Store.RecentDepartures(ctx)
+	d.Prefs = s.prefs(ctx)
+	d.AssistantOn = s.Assistant != nil
+	if d.AssistantOn {
+		d.AssistantModel = s.Assistant.Model()
+	}
+	d.AssistantURL = s.Cfg.PublicBaseURL + "/assistant"
+	d.AssistantToken, _ = s.AssistantToken(ctx)
+	d.AssistantLog, _ = s.Store.RecentAssistant(ctx, 8)
 
 	if d.Latest != nil && d.Latest.Latitude != nil && d.Latest.Longitude != nil && s.Weather != nil {
 		var err error
@@ -145,7 +167,7 @@ func (s *Server) data(ctx context.Context, rangeParam string) pageData {
 			slog.Warn("weather", "err", err)
 		}
 	}
-	p := s.plan(d.Latest, d.Weather, d.Now, d.Now.Add(15*time.Minute))
+	p := s.plan(ctx, d.Latest, d.Weather, d.Now, d.Now.Add(15*time.Minute), nil)
 	d.Preview = &p
 
 	if d.Status.VIN != "" && d.Latest != nil {
@@ -194,9 +216,9 @@ func estimateCost(u map[string]int) float64 {
 
 // plan works out what "I'm leaving at departAt" should do. Outside temperature comes
 // from the weather service when available, because the car's own sensor is stale
-// while it sleeps.
-func (s *Server) plan(latest *tesla.Snapshot, wx *weather.Report, now, departAt time.Time) planner.Plan {
-	in := planner.Input{Now: now.In(s.Cfg.Location), Departure: departAt.In(s.Cfg.Location)}
+// while it sleeps. req carries what the owner explicitly asked for, if anything.
+func (s *Server) plan(ctx context.Context, latest *tesla.Snapshot, wx *weather.Report, now, departAt time.Time, req *assistant.PrepareRequest) planner.Plan {
+	in := planner.Input{Now: now.In(s.Cfg.Location), Departure: departAt.In(s.Cfg.Location), Prefs: s.prefs(ctx)}
 	if latest != nil {
 		in.CabinC, in.OutsideC = latest.InsideTempC, latest.OutsideTempC
 	}
@@ -204,7 +226,57 @@ func (s *Server) plan(latest *tesla.Snapshot, wx *weather.Report, now, departAt 
 		t := wx.TempC
 		in.OutsideC, in.Precipitating = &t, wx.Precipitating()
 	}
+	if req != nil {
+		switch req.Want {
+		case "heat":
+			in.Want = planner.Heat
+		case "cool":
+			in.Want = planner.Cool
+		}
+		in.TempC, in.SeatHeat, in.SteeringHeat = req.TempC, req.SeatHeat, req.SteeringHeat
+	}
 	return planner.Make(in)
+}
+
+// schedule plans a departure and, unless no climate is needed, saves it for the
+// scheduler, which starts the climate at the plan's StartAt.
+func (s *Server) schedule(ctx context.Context, departAt time.Time, req *assistant.PrepareRequest) (planner.Plan, error) {
+	now := time.Now()
+	var latest *tesla.Snapshot
+	var wx *weather.Report
+	if vin := s.Poller.VIN(); vin != "" {
+		latest, _ = s.Store.LatestSnapshot(ctx, vin)
+	}
+	if latest != nil && latest.Latitude != nil && latest.Longitude != nil && s.Weather != nil {
+		wx, _ = s.Weather.Get(ctx, *latest.Latitude, *latest.Longitude)
+	}
+	p := s.plan(ctx, latest, wx, now, departAt, req)
+	if p.Action == planner.None {
+		return p, nil
+	}
+	dep := &store.Departure{DepartAt: departAt, StartAt: p.StartAt, TempC: p.TempC,
+		SeatHeat: p.SeatHeat, SteeringHeat: p.SteeringHeat, Reason: p.Reason}
+	if err := s.Store.CreateDeparture(ctx, dep); err != nil {
+		return p, err
+	}
+	if !p.StartAt.After(now.Add(30*time.Second)) && s.RunScheduler != nil {
+		s.RunScheduler()
+	}
+	return p, nil
+}
+
+// parseClock turns "HH:MM" into the next time it occurs (today, or tomorrow if it has passed).
+func (s *Server) parseClock(at string, now time.Time) (time.Time, error) {
+	t, err := time.ParseInLocation("15:04", at, s.Cfg.Location)
+	if err != nil {
+		return time.Time{}, err
+	}
+	local := now.In(s.Cfg.Location)
+	when := time.Date(local.Year(), local.Month(), local.Day(), t.Hour(), t.Minute(), 0, 0, s.Cfg.Location)
+	if when.Before(now) {
+		when = when.AddDate(0, 0, 1)
+	}
+	return when, nil
 }
 
 func (s *Server) page(name string) http.HandlerFunc {
@@ -382,46 +454,22 @@ func (s *Server) deleteRule(w http.ResponseWriter, r *http.Request) {
 // --- departures ("I'm leaving in N minutes") ---
 
 func (s *Server) depart(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
 	now := time.Now()
-	var departAt time.Time
+	departAt := now
 	if at := r.FormValue("at"); at != "" {
-		t, err := time.ParseInLocation("15:04", at, s.Cfg.Location)
-		if err != nil {
+		var err error
+		if departAt, err = s.parseClock(at, now); err != nil {
 			s.renderDepartures(w, r, "Pick a valid time.")
 			return
-		}
-		local := now.In(s.Cfg.Location)
-		departAt = time.Date(local.Year(), local.Month(), local.Day(), t.Hour(), t.Minute(), 0, 0, s.Cfg.Location)
-		if departAt.Before(now) {
-			departAt = departAt.AddDate(0, 0, 1) // a time earlier than now means tomorrow
 		}
 	} else {
 		mins, _ := strconv.Atoi(r.FormValue("minutes"))
 		departAt = now.Add(time.Duration(max(mins, 0)) * time.Minute)
 	}
-
-	var latest *tesla.Snapshot
-	var wx *weather.Report
-	if vin := s.Poller.VIN(); vin != "" {
-		latest, _ = s.Store.LatestSnapshot(ctx, vin)
-	}
-	if latest != nil && latest.Latitude != nil && latest.Longitude != nil && s.Weather != nil {
-		wx, _ = s.Weather.Get(ctx, *latest.Latitude, *latest.Longitude)
-	}
-	p := s.plan(latest, wx, now, departAt)
-	if p.Action == planner.None {
-		s.renderDepartures(w, r, p.Reason)
-		return
-	}
-	dep := &store.Departure{DepartAt: departAt, StartAt: p.StartAt, TempC: p.TempC,
-		SeatHeat: p.SeatHeat, SteeringHeat: p.SteeringHeat, Reason: p.Reason}
-	if err := s.Store.CreateDeparture(ctx, dep); err != nil {
+	p, err := s.schedule(r.Context(), departAt, nil)
+	if err != nil {
 		s.renderDepartures(w, r, "Couldn't save: "+err.Error())
 		return
-	}
-	if !p.StartAt.After(now.Add(30*time.Second)) && s.RunScheduler != nil {
-		s.RunScheduler()
 	}
 	s.renderDepartures(w, r, p.Reason)
 }
