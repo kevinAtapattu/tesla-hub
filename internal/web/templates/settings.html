@@ -37,7 +37,7 @@
       {{if .AssistantOn}}<span class="pill green"><span class="dot green"></span>Ready</span>{{else}}<span class="pill amber">Needs an API key</span>{{end}}</h2>
     <p class="muted" style="margin:-4px 0 16px">Send a message like "warm it up, I'll be there in 15". Claude reads it and the hub picks the temperature from the weather and your preferences below.</p>
     {{if not .AssistantOn}}
-    <div class="callout" style="margin:0 0 16px">Add <code>ANTHROPIC_API_KEY=...</code> to the hub's <code>.env</code> file, then restart the hub.</div>
+    <div class="callout" style="margin:0 0 16px">Add <code>ANTHROPIC_API_KEY=...</code> to the hub's <code>.env</code> file, then run <code>docker compose up -d hub</code> (a plain restart doesn't reload <code>.env</code>).</div>
     {{end}}
     {{template "assistant-log" .}}
     <div class="divider"></div>

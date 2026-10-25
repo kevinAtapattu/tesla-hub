@@ -44,6 +44,11 @@ Use get_car_status for questions about the car (battery, range, locks, how warm 
 
 Siri reads your reply aloud. Write one or two short plain sentences with no markdown or emoji, and say times like "6:15". Base the reply on what the tools returned: say what will happen and when, and if the tool says the weather changed the plan, mention it briefly.`
 
+// fallbackModels accept server-side refusal fallbacks; others (e.g. Haiku) reject the parameter.
+var fallbackModels = map[string]bool{
+	"claude-opus-5-5": true, "claude-opus-5": true, "claude-fable-5-1": true, "claude-sonnet-5-5": true,
+}
+
 type Assistant struct {
 	client  anthropic.Client
 	model   string
@@ -81,19 +86,19 @@ func (a *Assistant) Handle(ctx context.Context, message string) (string, error) 
 	now := time.Now().In(a.loc)
 	user := fmt.Sprintf("Local time: %s.\n\nOwner's message: %s", now.Format("Monday 15:04"), message)
 
-	runner := a.client.Beta.Messages.NewToolRunner(tools, anthropic.BetaToolRunnerParams{
-		BetaMessageNewParams: anthropic.BetaMessageNewParams{
-			Model:        anthropic.Model(a.model),
-			MaxTokens:    4000,
-			System:       []anthropic.BetaTextBlockParam{{Text: systemPrompt}},
-			OutputConfig: anthropic.BetaOutputConfigParam{Effort: anthropic.BetaOutputConfigEffortLow},
-			// If a safety classifier declines, retry on a fallback model instead of failing.
-			Fallbacks: anthropic.BetaFallbacksParamOfDefault(),
-			Betas:     []anthropic.AnthropicBeta{anthropic.AnthropicBetaServerSideFallback2026_07_01},
-			Messages:  []anthropic.BetaMessageParam{anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock(user))},
-		},
-		MaxIterations: 5,
-	})
+	params := anthropic.BetaMessageNewParams{
+		Model:        anthropic.Model(a.model),
+		MaxTokens:    4000,
+		System:       []anthropic.BetaTextBlockParam{{Text: systemPrompt}},
+		OutputConfig: anthropic.BetaOutputConfigParam{Effort: anthropic.BetaOutputConfigEffortLow},
+		Messages:     []anthropic.BetaMessageParam{anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock(user))},
+	}
+	if fallbackModels[a.model] {
+		// If a safety classifier declines, retry on a fallback model instead of failing.
+		params.Fallbacks = anthropic.BetaFallbacksParamOfDefault()
+		params.Betas = []anthropic.AnthropicBeta{anthropic.AnthropicBetaServerSideFallback2026_07_01}
+	}
+	runner := a.client.Beta.Messages.NewToolRunner(tools, anthropic.BetaToolRunnerParams{BetaMessageNewParams: params, MaxIterations: 5})
 	msg, err := runner.RunToCompletion(ctx)
 	if err != nil {
 		return "", err

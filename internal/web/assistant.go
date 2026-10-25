@@ -210,6 +210,10 @@ func (a assistantActions) Prepare(ctx context.Context, r assistant.PrepareReques
 	case r.MinutesFromNow != nil:
 		departAt = now.Add(time.Duration(min(max(*r.MinutesFromNow, 0), 24*60)) * time.Minute)
 	}
+	// A new request replaces any earlier one ("in 15... actually make it 25").
+	if _, err := s.Store.CancelPendingDepartures(ctx); err != nil {
+		return "", err
+	}
 	p, err := s.schedule(ctx, departAt, &r)
 	if err != nil {
 		return "", err

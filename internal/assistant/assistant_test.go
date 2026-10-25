@@ -67,6 +67,9 @@ func TestHandleRunsTools(t *testing.T) {
 	if requests[0]["model"] != "claude-opus-5-5" {
 		t.Errorf("model = %v", requests[0]["model"])
 	}
+	if _, ok := requests[0]["fallbacks"]; !ok {
+		t.Error("Opus request should ask for refusal fallbacks")
+	}
 	// The tool result goes back to the model in the second request.
 	if b, _ := json.Marshal(requests[1]["messages"]); !strings.Contains(string(b), "Heating to 23") {
 		t.Errorf("second request lacks the tool result: %s", b)
@@ -76,5 +79,25 @@ func TestHandleRunsTools(t *testing.T) {
 func TestNewWithoutKeyIsOff(t *testing.T) {
 	if New("", "", &fakeActions{}, time.UTC) != nil {
 		t.Fatal("expected nil assistant without an API key")
+	}
+}
+
+func TestHaikuSkipsFallbacks(t *testing.T) {
+	var req map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		json.Unmarshal(body, &req)
+		w.Header().Set("Content-Type", "application/json")
+		io.WriteString(w, `{"id":"m","type":"message","role":"assistant","model":"m","stop_reason":"end_turn",
+			"content":[{"type":"text","text":"Battery is at 80%."}],"usage":{"input_tokens":1,"output_tokens":1}}`)
+	}))
+	defer srv.Close()
+
+	a := New("k", "claude-haiku-5-5", &fakeActions{}, time.UTC, option.WithBaseURL(srv.URL))
+	if _, err := a.Handle(context.Background(), "how's the battery"); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := req["fallbacks"]; ok {
+		t.Error("Haiku doesn't support server-side fallbacks; the request must not include them")
 	}
 }
