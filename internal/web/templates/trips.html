@@ -2,7 +2,7 @@
 <div class="page-head">
   <div>
     <h1>Trips</h1>
-    <p>Every drive with its route and stats. Drives with live telemetry get full detail.</p>
+    <p>Every drive with its route and stats. <b>Live data</b> trips have a reading about every second; <b>Low detail</b> ones are from before live telemetry, with one every 2 minutes.</p>
   </div>
 </div>
 {{template "live-drive" .}}
@@ -10,21 +10,53 @@
 <div class="stack">
   {{range .Trips}}
   <a class="card trip-row" href="/trips/{{.ID}}">
-    <div class="trip-thumb">{{index $.TripPreviews .ID}}</div>
+    <div class="trip-thumb"><div class="minimap" data-path="{{index $.TripPreviewPaths .ID}}"></div>{{index $.TripPreviews .ID}}</div>
     <div class="trip-when">
       <div class="trip-title">{{partOfDay .Start}}</div>
       <div class="muted num">{{local .Start}} · {{hms .Duration}}</div>
     </div>
     <div class="trip-nums">
-      <div><b class="num">{{printf "%.1f" .DistanceKm}}</b><span>km</span></div>
-      <div><b class="num">{{printf "%.0f" .MaxSpeedKmh}}</b><span>top km/h</span></div>
-      <div><b class="num">{{printf "%.0f" .AvgSpeedKmh}}</b><span>avg km/h</span></div>
-      <div class="desktop-only"><b class="num">{{if .ZeroTo100}}{{secs .ZeroTo100}}{{else}}—{{end}}</b><span>0–100</span></div>
+      <div><b class="num">{{printf "%.1f" .DistanceKm}}<small>km</small></b><span>Distance</span></div>
+      <div><b class="num">{{printf "%.0f" .MaxSpeedKmh}}<small>km/h</small></b><span>Top speed</span></div>
+      <div><b class="num">{{printf "%.0f" .AvgSpeedKmh}}<small>km/h</small></b><span>Avg speed</span></div>
+      <div class="desktop-only"><b class="num">{{if .ZeroTo100}}{{secs .ZeroTo100}}{{else}}—{{end}}</b><span>0–100 km/h</span></div>
     </div>
-    {{if eq .Source "polling"}}<span class="pill">Basic</span>{{else}}<span class="pill green">Live data</span>{{end}}
+    {{if eq .Source "polling"}}<span class="pill trip-tag" title="Recorded before live telemetry was on: one reading every 2 minutes, so the route and stats are approximate">Low detail</span>{{else}}<span class="pill green trip-tag" title="Recorded from live telemetry, about one reading per second">Live data</span>{{end}}
   </a>
   {{end}}
 </div>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  // Each trip gets a small, non-interactive street map with its route on top.
+  // Maps are created as they scroll into view so a long list stays quick.
+  (function () {
+    if (!window.L) return; // keep the plain route previews
+    function color(s) { return s < 30 ? "#22c55e" : s < 70 ? "#eab308" : s < 105 ? "#f97316" : "#ef4444"; }
+    function draw(el) {
+      var pts; try { pts = JSON.parse(el.dataset.path || "[]"); } catch (e) { return; }
+      if (pts.length < 2) return;
+      var map = L.map(el, { zoomControl: false, attributionControl: true, dragging: false, scrollWheelZoom: false,
+        doubleClickZoom: false, boxZoom: false, keyboard: false, touchZoom: false, tap: false });
+      map.attributionControl.setPrefix(false);
+      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 16, attribution: "© OpenStreetMap" }).addTo(map);
+      for (var i = 1; i < pts.length; i++) {
+        L.polyline([[pts[i-1].lat, pts[i-1].lon], [pts[i].lat, pts[i].lon]], { color: color(pts[i].s), weight: 4, opacity: .95, interactive: false }).addTo(map);
+      }
+      var a = pts[0], z = pts[pts.length - 1];
+      L.circleMarker([a.lat, a.lon], { radius: 5, color: "#fff", weight: 2, fillColor: "#171717", fillOpacity: 1, interactive: false }).addTo(map);
+      L.circleMarker([z.lat, z.lon], { radius: 5, color: "#171717", weight: 2, fillColor: "#fff", fillOpacity: 1, interactive: false }).addTo(map);
+      map.fitBounds(pts.map(function (p) { return [p.lat, p.lon]; }), { padding: [14, 14] });
+      el.parentNode.classList.add("has-map");
+    }
+    var maps = document.querySelectorAll(".minimap");
+    if (!("IntersectionObserver" in window)) { maps.forEach(draw); return; }
+    var io = new IntersectionObserver(function (es) {
+      es.forEach(function (e) { if (e.isIntersecting) { io.unobserve(e.target); draw(e.target); } });
+    }, { rootMargin: "200px" });
+    maps.forEach(function (m) { io.observe(m); });
+  })();
+</script>
 {{else}}
 <div class="card"><div class="empty-note">No trips yet. Your next drive shows up here a few minutes after you park.</div></div>
 {{end}}
@@ -35,7 +67,7 @@
 <div class="page-head">
   <div>
     <h1>{{partOfDay .Start}}</h1>
-    <p>{{local .Start}} to {{clock .End}} · {{hms .Duration}}{{if eq .Source "polling"}} · basic data (before live telemetry){{end}}</p>
+    <p>{{local .Start}} to {{clock .End}} · {{hms .Duration}}{{if eq .Source "polling"}} · low detail: recorded before live telemetry, one reading every 2 minutes{{end}}</p>
   </div>
   <div class="actions"><a class="btn" href="/trips">All trips</a></div>
 </div>

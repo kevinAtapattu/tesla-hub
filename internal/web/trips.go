@@ -21,9 +21,14 @@ func (s *Server) tripsPage(w http.ResponseWriter, r *http.Request) {
 		d.Trips, _ = s.Store.ListTrips(r.Context(), vin, 100)
 	}
 	d.TripPreviews = map[int64]template.HTML{}
+	d.TripPreviewPaths = map[int64]string{}
 	for i := range d.Trips {
-		d.TripPreviews[d.Trips[i].ID] = routeSVG(d.Trips[i].Path)
-		d.Trips[i].Path = nil // the page only needs the preview
+		t := &d.Trips[i]
+		d.TripPreviews[t.ID] = routeSVG(t.Path) // shown until the map loads, or if it can't
+		if b, err := json.Marshal(thin(t.Path, 200)); err == nil {
+			d.TripPreviewPaths[t.ID] = string(b)
+		}
+		t.Path = nil // the page only needs the previews
 	}
 	d.Live = s.liveTrip(r)
 	s.render(w, "index.html", d)
@@ -171,4 +176,17 @@ func routeSVG(path []trips.PathPoint) template.HTML {
 	ex, ey := pt(path[len(path)-1])
 	fmt.Fprintf(&b, `<circle class="start" cx="%.1f" cy="%.1f" r="4"/><circle class="end" cx="%.1f" cy="%.1f" r="4"/></svg>`, sx, sy, ex, ey)
 	return template.HTML(b.String())
+}
+
+// thin keeps at most n evenly spaced points, always including both ends.
+func thin(path []trips.PathPoint, n int) []trips.PathPoint {
+	if len(path) <= n {
+		return path
+	}
+	out := make([]trips.PathPoint, 0, n)
+	step := float64(len(path)-1) / float64(n-1)
+	for i := 0; i < n; i++ {
+		out = append(out, path[int(math.Round(float64(i)*step))])
+	}
+	return out
 }

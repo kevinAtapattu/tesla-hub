@@ -144,14 +144,15 @@ type pageData struct {
 	AssistantToken string
 	AssistantLog   []store.AssistantEntry
 
-	Trips        []store.SavedTrip
-	TripPreviews map[int64]template.HTML // route previews for the trip list, by trip ID
-	Trip         *store.SavedTrip
-	TripPath     template.JS
-	TripSpeed    chart
-	TripPower    chart
-	TripG        template.HTML
-	Live         *trips.Trip // drive under way
+	Trips            []store.SavedTrip
+	TripPreviews     map[int64]template.HTML // route previews for the trip list, by trip ID
+	TripPreviewPaths map[int64]string        // the same routes as JSON, for the mini maps
+	Trip             *store.SavedTrip
+	TripPath         template.JS
+	TripSpeed        chart
+	TripPower        chart
+	TripG            template.HTML
+	Live             *trips.Trip // drive under way
 
 	TelemetryOn     bool
 	TelemetryHost   string
