@@ -10,6 +10,7 @@
 <div class="stack">
   {{range .Trips}}
   <a class="card trip-row" href="/trips/{{.ID}}">
+    <div class="trip-thumb">{{index $.TripPreviews .ID}}</div>
     <div class="trip-when">
       <div class="trip-title">{{partOfDay .Start}}</div>
       <div class="muted num">{{local .Start}} · {{hms .Duration}}</div>

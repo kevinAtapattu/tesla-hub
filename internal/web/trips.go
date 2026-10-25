@@ -20,6 +20,11 @@ func (s *Server) tripsPage(w http.ResponseWriter, r *http.Request) {
 	if vin := s.Poller.VIN(); vin != "" {
 		d.Trips, _ = s.Store.ListTrips(r.Context(), vin, 100)
 	}
+	d.TripPreviews = map[int64]template.HTML{}
+	for i := range d.Trips {
+		d.TripPreviews[d.Trips[i].ID] = routeSVG(d.Trips[i].Path)
+		d.Trips[i].Path = nil // the page only needs the preview
+	}
 	d.Live = s.liveTrip(r)
 	s.render(w, "index.html", d)
 }
@@ -95,5 +100,75 @@ func frictionCircle(samples []trips.Sample) template.HTML {
 		fmt.Fprintf(&b, `<circle class="pt" cx="%.1f" cy="%.1f" r="2"/>`, x, y)
 	}
 	b.WriteString(`</svg>`)
+	return template.HTML(b.String())
+}
+
+// speedColor matches the trip map's legend.
+func speedColor(kmh float64) string {
+	switch {
+	case kmh < 30:
+		return "#22c55e"
+	case kmh < 70:
+		return "#eab308"
+	case kmh < 105:
+		return "#f97316"
+	}
+	return "#ef4444"
+}
+
+// routeSVG draws a trip's route coloured by speed as a small preview, with no
+// map tiles so a long list of trips stays light.
+func routeSVG(path []trips.PathPoint) template.HTML {
+	const w, h, pad = 200.0, 120.0, 10.0
+	if len(path) < 2 {
+		return template.HTML(`<svg class="route-preview" viewBox="0 0 200 120" aria-hidden="true"></svg>`)
+	}
+	// Equirectangular projection, squashed by cos(latitude) so shapes aren't stretched.
+	k := math.Cos(path[0].Lat * math.Pi / 180)
+	minX, maxX, minY, maxY := math.Inf(1), math.Inf(-1), math.Inf(1), math.Inf(-1)
+	for _, p := range path {
+		x, y := p.Lon*k, p.Lat
+		minX, maxX, minY, maxY = math.Min(minX, x), math.Max(maxX, x), math.Min(minY, y), math.Max(maxY, y)
+	}
+	span := math.Max(math.Max(maxX-minX, maxY-minY), 1e-6)
+	scale := math.Min((w-2*pad)/math.Max(maxX-minX, span*0.05), (h-2*pad)/math.Max(maxY-minY, span*0.05))
+	offX := (w - (maxX-minX)*scale) / 2
+	offY := (h - (maxY-minY)*scale) / 2
+	pt := func(p trips.PathPoint) (float64, float64) {
+		return offX + (p.Lon*k-minX)*scale, h - offY - (p.Lat-minY)*scale
+	}
+
+	// Short trips keep every point; long ones are thinned so the SVG stays small.
+	step := max(1, len(path)/250)
+	var b strings.Builder
+	fmt.Fprintf(&b, `<svg class="route-preview" viewBox="0 0 %.0f %.0f" aria-hidden="true">`, w, h)
+	// Runs of the same colour become one polyline.
+	color := ""
+	var pts strings.Builder
+	flush := func() {
+		if pts.Len() > 0 {
+			fmt.Fprintf(&b, `<polyline points="%s" stroke="%s"/>`, strings.TrimSpace(pts.String()), color)
+		}
+		pts.Reset()
+	}
+	for i := 0; i < len(path); i += step {
+		if i > 0 && i+step >= len(path) {
+			i = len(path) - 1
+		}
+		c := speedColor(path[i].Speed)
+		x, y := pt(path[i])
+		if c != color && i > 0 {
+			fmt.Fprintf(&pts, " %.1f,%.1f", x, y) // close the previous run where the new one starts
+			flush()
+			px, py := pt(path[max(0, i-step)])
+			fmt.Fprintf(&pts, "%.1f,%.1f", px, py)
+		}
+		color = c
+		fmt.Fprintf(&pts, " %.1f,%.1f", x, y)
+	}
+	flush()
+	sx, sy := pt(path[0])
+	ex, ey := pt(path[len(path)-1])
+	fmt.Fprintf(&b, `<circle class="start" cx="%.1f" cy="%.1f" r="4"/><circle class="end" cx="%.1f" cy="%.1f" r="4"/></svg>`, sx, sy, ex, ey)
 	return template.HTML(b.String())
 }

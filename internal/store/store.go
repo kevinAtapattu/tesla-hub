@@ -558,7 +558,7 @@ type SavedTrip struct {
 
 func (s *Store) ListTrips(ctx context.Context, vin string, limit int) ([]SavedTrip, error) {
 	rows, err := s.db.Query(ctx, `
-		SELECT id, source, summary - 'Path' FROM trips WHERE vin = $1 ORDER BY start_at DESC LIMIT $2`, vin, limit)
+		SELECT id, source, summary FROM trips WHERE vin = $1 ORDER BY start_at DESC LIMIT $2`, vin, limit)
 	if err != nil {
 		return nil, err
 	}
