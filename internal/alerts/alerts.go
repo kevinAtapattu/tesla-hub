@@ -1,9 +1,12 @@
-// Package alerts texts the phone when the car starts a drive. The text goes out
-// as an iMessage through cmd/imessage-relay, which runs on the Mac itself.
+// Package alerts posts to a Discord channel (through a webhook) when the car
+// starts a drive, mentioning the user so their phone is notified.
 package alerts
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -81,11 +84,11 @@ type Store interface {
 
 // Watcher gets every telemetry record and sends the alert.
 type Watcher struct {
-	Store      Store
-	RelayURL   string // the iMessage relay, e.g. http://host.docker.internal:8097
-	RelayToken string
-	Location   *time.Location
-	Client     *http.Client
+	Store     Store
+	Webhook   string // Discord webhook URL
+	MentionID string // Discord user ID to @mention, so the phone notifies
+	Location  *time.Location
+	Client    *http.Client
 
 	once      sync.Once
 	ch        chan *telemetry.Point
@@ -187,31 +190,37 @@ func (w *Watcher) SetMode(ctx context.Context, mode string) error {
 	return w.Store.SetSetting(ctx, settingKey, s)
 }
 
-// Ready says whether the relay is configured.
-func (w *Watcher) Ready() bool { return w.RelayURL != "" && w.RelayToken != "" }
+// Ready says whether the webhook is configured.
+func (w *Watcher) Ready() bool { return w.Webhook != "" }
 
-// Send texts msg through the relay.
+// Send posts msg to the Discord channel.
 func (w *Watcher) Send(ctx context.Context, msg string) error {
 	if !w.Ready() {
-		return fmt.Errorf("set IMESSAGE_RELAY_TOKEN in .env and start the relay")
+		return fmt.Errorf("set DISCORD_WEBHOOK_URL in .env, then run docker compose up -d hub")
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, w.RelayURL+"/send", strings.NewReader(msg))
+	body := map[string]any{"username": "Tesla Hub", "content": msg, "allowed_mentions": map[string]any{"parse": []string{}}}
+	if w.MentionID != "" {
+		body["content"] = "<@" + w.MentionID + "> " + msg
+		body["allowed_mentions"] = map[string]any{"users": []string{w.MentionID}}
+	}
+	raw, _ := json.Marshal(body)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, w.Webhook, bytes.NewReader(raw))
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Authorization", "Bearer "+w.RelayToken)
+	req.Header.Set("Content-Type", "application/json")
 	c := w.Client
 	if c == nil {
-		c = &http.Client{Timeout: 30 * time.Second}
+		c = &http.Client{Timeout: 15 * time.Second}
 	}
 	resp, err := c.Do(req)
 	if err != nil {
-		return fmt.Errorf("the iMessage relay on the Mac isn't reachable: %w", err)
+		return fmt.Errorf("discord: %w", errors.Unwrap(err)) // the error text would include the webhook URL
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 500))
-		return fmt.Errorf("iMessage relay: %s %s", resp.Status, strings.TrimSpace(string(body)))
+	if resp.StatusCode/100 != 2 {
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 300))
+		return fmt.Errorf("discord: %s %s", resp.Status, strings.TrimSpace(string(b)))
 	}
 	return nil
 }

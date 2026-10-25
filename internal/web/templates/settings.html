@@ -167,7 +167,7 @@
     {{if eq .Alerts.Mode "next"}}<span class="pill green"><span class="dot green pulse"></span>Next drive</span>
     {{else if eq .Alerts.Mode "every"}}<span class="pill green"><span class="dot green"></span>Every drive</span>
     {{else}}<span class="pill">Off</span>{{end}}</h2>
-  <p class="muted" style="margin:-4px 0 16px">Get a text the moment the car starts driving. Short moves, like reversing out of a spot after a stop, don't count; the car has to have been parked for 10 minutes.</p>
+  <p class="muted" style="margin:-4px 0 16px">Get a Discord notification the moment the car starts driving. Short moves, like reversing out of a spot after a stop, don't count; the car has to have been parked for 10 minutes.</p>
   <div class="seg" style="margin-bottom:16px">
     <button hx-post="/alerts/mode" hx-vals='{"mode":"off"}' hx-target="#alerts" hx-swap="outerHTML" class="{{if eq .Alerts.Mode "off"}}on{{end}}">Off</button>
     <button hx-post="/alerts/mode" hx-vals='{"mode":"next"}' hx-target="#alerts" hx-swap="outerHTML" class="{{if eq .Alerts.Mode "next"}}on{{end}}">Next drive only</button>
@@ -177,7 +177,7 @@
     <div class="row"><span>Last alert</span><span>{{if .Alerts.LastAt.IsZero}}none yet{{else}}{{ago .Alerts.LastAt}}{{end}}</span></div>
   </div>
   {{if .AlertsNote}}<div class="callout">{{.AlertsNote}}</div>{{end}}
-  {{if not .AlertsReady}}<div class="callout">Texts go out as iMessages from this Mac. Set <code>IMESSAGE_TO</code> and <code>IMESSAGE_RELAY_TOKEN</code> in <code>.env</code> and start the relay (<code>cmd/imessage-relay</code>).</div>{{end}}
+  {{if not .AlertsReady}}<div class="callout">Alerts are posted to Discord. Set <code>DISCORD_WEBHOOK_URL</code> (and <code>DISCORD_USER_ID</code> to be @mentioned) in <code>.env</code>, then run <code>docker compose up -d hub</code>.</div>{{end}}
   <div class="actions" style="margin-top:16px">
     <button class="btn" hx-post="/alerts/test" hx-target="#alerts" hx-swap="outerHTML" hx-disabled-elt="this">Send test</button>
   </div>

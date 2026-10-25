@@ -173,7 +173,7 @@ type pageData struct {
 	TelemetryNote   string // result of the last configure/check, shown in the card
 
 	AlertsOn    bool
-	AlertsReady bool // the iMessage relay is configured
+	AlertsReady bool // the Discord webhook is configured
 	Alerts      alerts.Settings
 	AlertsNote  string
 

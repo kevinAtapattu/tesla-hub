@@ -101,7 +101,7 @@ func serve(ctx context.Context, cfg *config.Config) error {
 	go sched.Run(ctx)
 	tripBuilder := &trips.Builder{Store: st, VIN: p.VIN}
 	go tripBuilder.Run(ctx)
-	driveAlerts := &alerts.Watcher{Store: st, Location: cfg.Location, RelayURL: cfg.IMessageRelayURL, RelayToken: cfg.IMessageRelayToken}
+	driveAlerts := &alerts.Watcher{Store: st, Location: cfg.Location, Webhook: cfg.DiscordWebhook, MentionID: cfg.DiscordUserID}
 	go driveAlerts.Run(ctx)
 	var feed *telemetry.Receiver
 	if cfg.TelemetryHost != "" {

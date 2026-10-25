@@ -38,7 +38,7 @@ func (s *Server) testAlert(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	note := "Test sent. It should arrive as an iMessage in a few seconds."
+	note := "Test sent. Check Discord."
 	if err := s.Alerts.Send(r.Context(), "🚗 Test from Tesla Hub: drive alerts work. You'll get a text like this when the car starts moving."); err != nil {
 		note = "Test failed: " + err.Error()
 	}

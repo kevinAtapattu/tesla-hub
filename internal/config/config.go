@@ -41,10 +41,10 @@ type Config struct {
 	TelemetryZMQ      string
 	TelemetryCertsDir string
 
-	IMessageRelayURL   string // the iMessage relay on the Mac, for drive alerts
-	IMessageRelayToken string
-	AnthropicAPIKey    string // enables the assistant ("warm it up, I'll be there in 15")
-	AssistantModel     string
+	DiscordWebhook  string // drive alerts are posted here
+	DiscordUserID   string // and mention this user so the phone notifies
+	AnthropicAPIKey string // enables the assistant ("warm it up, I'll be there in 15")
+	AssistantModel  string
 }
 
 func Load() (*Config, error) {
@@ -77,8 +77,8 @@ func Load() (*Config, error) {
 		TelemetryZMQ:        env("TELEMETRY_ZMQ", "tcp://telemetry:5284"),
 		TelemetryCertsDir:   env("TELEMETRY_CERTS_DIR", "secrets/telemetry"),
 		AnthropicAPIKey:     os.Getenv("ANTHROPIC_API_KEY"),
-		IMessageRelayURL:    env("IMESSAGE_RELAY_URL", "http://host.docker.internal:8097"),
-		IMessageRelayToken:  os.Getenv("IMESSAGE_RELAY_TOKEN"),
+		DiscordWebhook:      os.Getenv("DISCORD_WEBHOOK_URL"),
+		DiscordUserID:       os.Getenv("DISCORD_USER_ID"),
 		AssistantModel:      env("ASSISTANT_MODEL", "claude-opus-5-5"),
 	}
 	if c.Region != "na" && c.Region != "eu" {
