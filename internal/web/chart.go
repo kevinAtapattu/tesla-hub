@@ -132,8 +132,11 @@ func buildChart(pts []store.Point, from, to time.Time, loc *time.Location, unit 
 	c.SVG = template.HTML(b.String())
 
 	layout := "3 PM"
-	if to.Sub(from) > 36*time.Hour {
+	switch span := to.Sub(from); {
+	case span > 36*time.Hour:
 		layout = "Mon"
+	case span < 4*time.Hour: // a single drive
+		layout = "3:04"
 	}
 	for i := 0; i <= 4; i++ {
 		t := from.Add(time.Duration(float64(to.Sub(from)) * float64(i) / 4))

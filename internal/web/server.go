@@ -25,6 +25,7 @@ import (
 	"github.com/kevin/tesla-hub/internal/store"
 	"github.com/kevin/tesla-hub/internal/telemetry"
 	"github.com/kevin/tesla-hub/internal/tesla"
+	"github.com/kevin/tesla-hub/internal/trips"
 	"github.com/kevin/tesla-hub/internal/weather"
 )
 
@@ -40,6 +41,8 @@ type Server struct {
 	Weather   *weather.Client
 	// RunScheduler asks the scheduler to check for due departures right away.
 	RunScheduler func()
+	// Trips finds the drive under way for the live card.
+	Trips *trips.Builder
 	// Telemetry is the live feed from the car; nil when TELEMETRY_HOST isn't set.
 	Telemetry *telemetry.Receiver
 	// Assistant answers messages like "warm it up, I'll be there in 15". Nil without an API key.
@@ -56,6 +59,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /controls", s.page("controls"))
 	mux.HandleFunc("GET /schedules", s.page("schedules"))
 	mux.HandleFunc("GET /settings", s.page("settings"))
+	mux.HandleFunc("GET /trips", s.tripsPage)
+	mux.HandleFunc("GET /trips/{id}", s.tripPage)
+	mux.HandleFunc("GET /live", s.livePartial)
 	mux.HandleFunc("GET /auth/login", s.login)
 	mux.HandleFunc("GET /auth/callback", s.callback) // must stay public: Tesla redirects here
 	mux.HandleFunc("POST /auth/logout", s.logout)
@@ -137,6 +143,14 @@ type pageData struct {
 	AssistantURL   string
 	AssistantToken string
 	AssistantLog   []store.AssistantEntry
+
+	Trips     []store.SavedTrip
+	Trip      *store.SavedTrip
+	TripPath  template.JS
+	TripSpeed chart
+	TripPower chart
+	TripG     template.HTML
+	Live      *trips.Trip // drive under way
 
 	TelemetryOn     bool
 	TelemetryHost   string
@@ -544,6 +558,38 @@ func funcs(loc *time.Location) template.FuncMap {
 		"mod": func(a, b int) int { return a % b },
 		"nf":  rollingNumber,
 		"inc": func(i int) int { return i + 1 },
+		"deref": func(p *float64) float64 {
+			if p == nil {
+				return 0
+			}
+			return *p
+		},
+		"hms": func(d time.Duration) string {
+			m := int(d.Round(time.Minute).Minutes())
+			if m < 60 {
+				return fmt.Sprintf("%d min", m)
+			}
+			return fmt.Sprintf("%d h %02d min", m/60, m%60)
+		},
+		"secs": func(d *time.Duration) string {
+			if d == nil {
+				return "—"
+			}
+			return fmt.Sprintf("%.1f s", d.Seconds())
+		},
+		"partOfDay": func(t time.Time) string {
+			switch h := t.In(loc).Hour(); {
+			case h < 5:
+				return "Night drive"
+			case h < 12:
+				return "Morning drive"
+			case h < 17:
+				return "Afternoon drive"
+			case h < 21:
+				return "Evening drive"
+			}
+			return "Night drive"
+		},
 		"dur": func(mins *int) string {
 			switch {
 			case mins == nil:

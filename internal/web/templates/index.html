@@ -251,6 +251,25 @@
   .usage-bar { height: 8px; border-radius: 999px; background: var(--track); overflow: hidden; margin: 16px 0 6px; }
   .usage-bar i { display: block; height: 100%; background: var(--primary); border-radius: 999px; }
 
+  /* ---------- trips ---------- */
+  .trip-row { display: flex; align-items: center; gap: 20px; padding: 16px 20px; transition: border-color .15s, box-shadow .15s; }
+  .trip-row:hover { border-color: var(--line-strong); }
+  .trip-when { flex: 1; min-width: 0; }
+  .trip-title { font-weight: 600; font-size: 15px; }
+  .trip-nums { display: flex; gap: 24px; }
+  .trip-nums div { display: grid; text-align: right; }
+  .trip-nums b { font-size: 17px; font-weight: 600; }
+  .trip-nums span { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  @media (max-width: 767px) { .trip-row { flex-wrap: wrap; gap: 12px; } .trip-nums { gap: 16px; } }
+  .trip-map { height: 420px; background: var(--hover); }
+  .dark .trip-map .leaflet-tile-pane { filter: invert(.92) hue-rotate(180deg) saturate(.4) brightness(.95); }
+  .gwrap { display: grid; place-items: center; }
+  .gcircle { width: 100%; max-width: 280px; height: auto; }
+  .gcircle .ring { fill: none; stroke: var(--line); stroke-width: 1; }
+  .gcircle .pt { fill: var(--violet); opacity: .45; }
+  .gcircle text { font-size: 9px; fill: var(--muted); }
+  .live-card { border-color: var(--green-ring); box-shadow: 0 0 0 3px var(--green-bg); }
+
   /* ---------- toasts ---------- */
   #toast { position: fixed; right: 24px; bottom: 24px; z-index: 100; width: 356px; max-width: calc(100% - 32px); }
   @media (max-width: 767px) { #toast { right: 16px; bottom: 16px; } }
@@ -292,6 +311,7 @@
     </div>
     <nav class="nav">
       <a href="/" class="{{if eq .Page "dashboard"}}on{{end}}"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Dashboard</a>
+      <a href="/trips" class="{{if or (eq .Page "trips") (eq .Page "trip")}}on{{end}}"><svg class="i" viewBox="0 0 24 24"><circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M8 19h8.5a3.5 3.5 0 0 0 0-7h-9a3.5 3.5 0 0 1 0-7H16"/></svg>Trips</a>
       <a href="/controls" class="{{if eq .Page "controls"}}on{{end}}"><svg class="i" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>Controls</a>
       <a href="/schedules" class="{{if eq .Page "schedules"}}on{{end}}"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Schedules</a>
       <a href="/settings" class="{{if eq .Page "settings"}}on{{end}}"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Settings</a>
@@ -319,6 +339,8 @@
         {{if eq .Page "controls"}}{{template "controls" .}}
         {{else if eq .Page "schedules"}}{{template "schedules" .}}
         {{else if eq .Page "settings"}}{{template "settings" .}}
+        {{else if eq .Page "trips"}}{{template "trips" .}}
+        {{else if eq .Page "trip"}}{{template "trip" .}}
         {{else}}{{template "dashboard" .}}{{end}}
       </div>
     </main>

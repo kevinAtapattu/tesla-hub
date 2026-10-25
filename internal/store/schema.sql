@@ -143,3 +143,17 @@ CREATE TABLE IF NOT EXISTS telemetry_events (
     data  jsonb NOT NULL
 );
 CREATE INDEX IF NOT EXISTS telemetry_events_time ON telemetry_events (time DESC);
+
+-- Finished drives with their stats (built from telemetry, or from polling before
+-- telemetry existed). summary holds the full stats and the route.
+CREATE TABLE IF NOT EXISTS trips (
+    id          bigserial PRIMARY KEY,
+    vin         text NOT NULL,
+    start_at    timestamptz NOT NULL,
+    end_at      timestamptz NOT NULL,
+    source      text NOT NULL, -- telemetry or polling
+    distance_km double precision NOT NULL,
+    summary     jsonb NOT NULL,
+    UNIQUE (vin, start_at)
+);
+CREATE INDEX IF NOT EXISTS trips_vin_start ON trips (vin, start_at DESC);

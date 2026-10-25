@@ -1,0 +1,112 @@
+{{define "trips"}}
+<div class="page-head">
+  <div>
+    <h1>Trips</h1>
+    <p>Every drive with its route and stats. Drives with live telemetry get full detail.</p>
+  </div>
+</div>
+{{template "live-drive" .}}
+{{if .Trips}}
+<div class="stack">
+  {{range .Trips}}
+  <a class="card trip-row" href="/trips/{{.ID}}">
+    <div class="trip-when">
+      <div class="trip-title">{{partOfDay .Start}}</div>
+      <div class="muted num">{{local .Start}} · {{hms .Duration}}</div>
+    </div>
+    <div class="trip-nums">
+      <div><b class="num">{{printf "%.1f" .DistanceKm}}</b><span>km</span></div>
+      <div><b class="num">{{printf "%.0f" .MaxSpeedKmh}}</b><span>top km/h</span></div>
+      <div><b class="num">{{printf "%.0f" .AvgSpeedKmh}}</b><span>avg km/h</span></div>
+      <div class="desktop-only"><b class="num">{{if .ZeroTo100}}{{secs .ZeroTo100}}{{else}}—{{end}}</b><span>0–100</span></div>
+    </div>
+    {{if eq .Source "polling"}}<span class="pill">Basic</span>{{else}}<span class="pill green">Live data</span>{{end}}
+  </a>
+  {{end}}
+</div>
+{{else}}
+<div class="card"><div class="empty-note">No trips yet. Your next drive shows up here a few minutes after you park.</div></div>
+{{end}}
+{{end}}
+
+{{define "trip"}}
+{{with .Trip}}
+<div class="page-head">
+  <div>
+    <h1>{{partOfDay .Start}}</h1>
+    <p>{{local .Start}} to {{clock .End}} · {{hms .Duration}}{{if eq .Source "polling"}} · basic data (before live telemetry){{end}}</p>
+  </div>
+  <div class="actions"><a class="btn" href="/trips">All trips</a></div>
+</div>
+
+<div class="grid g4" style="margin-bottom:16px">
+  <div class="card stat"><div class="label">Distance</div><div class="value">{{nf "t-dist" .DistanceKm 1}}<span class="unit">km</span></div><div class="hint">{{hms .Moving}} moving</div></div>
+  <div class="card stat"><div class="label">Top speed</div><div class="value">{{nf "t-top" .MaxSpeedKmh 0}}<span class="unit">km/h</span></div><div class="hint">avg {{printf "%.0f" .AvgSpeedKmh}} km/h moving</div></div>
+  <div class="card stat"><div class="label">0–100 km/h</div><div class="value">{{if .ZeroTo100}}{{secs .ZeroTo100}}{{else}}—{{end}}</div><div class="hint">{{if .ZeroTo100}}best launch this trip{{else}}no full launch{{end}}</div></div>
+  <div class="card stat"><div class="label">Efficiency</div><div class="value">{{if .WhPerKm}}{{nf "t-eff" .WhPerKm 0}}<span class="unit">Wh/km</span>{{else}}—{{end}}</div><div class="hint">{{if .SocStart}}battery {{printf "%.0f" (deref .SocStart)}}% → {{printf "%.0f" (deref .SocEnd)}}%{{else}}&nbsp;{{end}}</div></div>
+</div>
+
+<div class="card flush" style="margin-bottom:16px">
+  <h2 class="card-title">Route <span class="legend"><span><i style="background:#22c55e"></i>slow</span><span><i style="background:#eab308"></i>city</span><span><i style="background:#f97316"></i>highway</span><span><i style="background:#ef4444"></i>fast</span></span></h2>
+  <div id="trip-map" class="trip-map"></div>
+</div>
+
+<div class="grid g2">
+  <div class="card">
+    <h2 class="card-title">Performance</h2>
+    <div class="rows">
+      <div class="row"><span>Peak power</span><span class="num">{{printf "%.0f" .PeakPowerKW}} kW</span></div>
+      <div class="row"><span>Peak regen</span><span class="num">{{printf "%.0f" .PeakRegenKW}} kW</span></div>
+      <div class="row"><span>Hardest acceleration</span><span class="num">{{printf "%.2f" .MaxAccelG}} g</span></div>
+      <div class="row"><span>Hardest braking</span><span class="num">{{printf "%.2f" .MaxBrakeG}} g</span></div>
+      <div class="row"><span>Hardest cornering</span><span class="num">{{printf "%.2f" .MaxLatG}} g</span></div>
+      <div class="row"><span>Energy used</span><span class="num">{{printf "%.2f" .EnergyKWh}} kWh ({{printf "%.2f" .RegenKWh}} regenerated)</span></div>
+      <div class="row"><span>Data points</span><span class="num">{{.Samples}}</span></div>
+    </div>
+  </div>
+  <div class="card">
+    <h2 class="card-title">G-forces <span class="muted" style="font-size:12px">each dot is one second</span></h2>
+    {{if $.TripG}}<div class="gwrap">{{$.TripG}}</div>{{else}}<div class="nochart">Needs live telemetry</div>{{end}}
+  </div>
+  {{if eq .Source "telemetry"}}
+  <div class="card span2"><h2 class="card-title">Speed · km/h</h2>{{template "chart" $.TripSpeed}}</div>
+  <div class="card span2"><h2 class="card-title">Power · kW <span class="muted" style="font-size:12px">below zero is regenerative braking</span></h2>{{template "chart" $.TripPower}}</div>
+  {{end}}
+</div>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  (function () {
+    var pts = {{$.TripPath}} || [];
+    if (!pts.length || !window.L) return;
+    var map = L.map("trip-map", { scrollWheelZoom: false, attributionControl: true });
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(map);
+    function color(s) { return s < 30 ? "#22c55e" : s < 70 ? "#eab308" : s < 105 ? "#f97316" : "#ef4444"; }
+    for (var i = 1; i < pts.length; i++) {
+      L.polyline([[pts[i-1].lat, pts[i-1].lon], [pts[i].lat, pts[i].lon]], { color: color(pts[i].s), weight: 5, opacity: .9 }).addTo(map);
+    }
+    var a = pts[0], z = pts[pts.length - 1];
+    L.circleMarker([a.lat, a.lon], { radius: 7, color: "#fff", weight: 2, fillColor: "#171717", fillOpacity: 1 }).addTo(map).bindTooltip("Start");
+    L.circleMarker([z.lat, z.lon], { radius: 7, color: "#171717", weight: 2, fillColor: "#fff", fillOpacity: 1 }).addTo(map).bindTooltip("End");
+    map.fitBounds(pts.map(function (p) { return [p.lat, p.lon]; }), { padding: [24, 24] });
+  })();
+</script>
+{{end}}
+{{end}}
+
+{{define "live-drive"}}
+<div id="live-drive" hx-get="/live" hx-trigger="every {{if .Live}}3s{{else}}30s{{end}}" hx-swap="outerHTML">
+  {{with .Live}}
+  <div class="card live-card" style="margin-bottom:16px">
+    <h2 class="card-title">Driving now <span class="pill green"><span class="dot green pulse"></span>Live · {{hms .Duration}}</span></h2>
+    <div class="grid g4">
+      <div><div class="muted">Distance</div><div class="big">{{nf "l-dist" .DistanceKm 1}}<span class="unit">km</span></div></div>
+      <div><div class="muted">Top speed</div><div class="big">{{nf "l-top" .MaxSpeedKmh 0}}<span class="unit">km/h</span></div></div>
+      <div><div class="muted">Avg moving</div><div class="big">{{nf "l-avg" .AvgSpeedKmh 0}}<span class="unit">km/h</span></div></div>
+      <div><div class="muted">Peak power</div><div class="big">{{nf "l-pwr" .PeakPowerKW 0}}<span class="unit">kW</span></div></div>
+    </div>
+  </div>
+  {{end}}
+</div>
+{{end}}

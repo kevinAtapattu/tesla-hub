@@ -14,6 +14,7 @@ import (
 
 	"github.com/kevin/tesla-hub/internal/telemetry"
 	"github.com/kevin/tesla-hub/internal/tesla"
+	"github.com/kevin/tesla-hub/internal/trips"
 )
 
 //go:embed schema.sql
@@ -279,6 +280,7 @@ type Point struct {
 	InsideTempC  *float64
 	OutsideTempC *float64
 	SpeedKmh     *float64
+	PowerKW      *float64
 }
 
 // Series returns samples for vin since the given time, oldest first.
@@ -471,4 +473,135 @@ func (s *Store) InsertTelemetry(ctx context.Context, p *telemetry.Point) error {
 func (s *Store) InsertTelemetryEvent(ctx context.Context, vin, kind string, t time.Time, data json.RawMessage) error {
 	_, err := s.db.Exec(ctx, `INSERT INTO telemetry_events (time, vin, kind, data) VALUES ($1, $2, $3, $4)`, t, vin, kind, data)
 	return err
+}
+
+// --- trips ---
+
+// TelemetrySamples returns telemetry records after the given time, oldest first.
+// Fields a record didn't carry are nil; trips.Fill carries values forward.
+func (s *Store) TelemetrySamples(ctx context.Context, vin string, after time.Time, limit int) ([]trips.Sample, error) {
+	rows, err := s.db.Query(ctx, `
+		SELECT time, coalesce(gear, ''), speed_kmh, latitude, longitude, odometer_km, soc, power_kw, lat_accel_ms2, long_accel_ms2
+		FROM telemetry WHERE vin = $1 AND time > $2 AND NOT resend ORDER BY time LIMIT $3`, vin, after, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []trips.Sample
+	for rows.Next() {
+		var x trips.Sample
+		if err := rows.Scan(&x.Time, &x.Gear, &x.SpeedKmh, &x.Latitude, &x.Longitude, &x.OdometerKm, &x.Soc, &x.PowerKW, &x.LatAccel, &x.LongAccel); err != nil {
+			return nil, err
+		}
+		out = append(out, x)
+	}
+	return out, rows.Err()
+}
+
+// FirstTelemetry is when streaming began for vin (zero if it never has).
+func (s *Store) FirstTelemetry(ctx context.Context, vin string) (time.Time, error) {
+	var t *time.Time
+	err := s.db.QueryRow(ctx, `SELECT min(time) FROM telemetry WHERE vin = $1`, vin).Scan(&t)
+	if err != nil || t == nil {
+		return time.Time{}, err
+	}
+	return *t, nil
+}
+
+// PollingSamples returns polled vehicle_data samples in [from, to), oldest first.
+func (s *Store) PollingSamples(ctx context.Context, vin string, from, to time.Time) ([]trips.Sample, error) {
+	rows, err := s.db.Query(ctx, `
+		SELECT time, coalesce(shift_state, ''), speed_kmh, latitude, longitude, odometer_km, battery_level::double precision, power_kw
+		FROM vehicle_states WHERE vin = $1 AND time > $2 AND time < $3 ORDER BY time`, vin, from, to)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []trips.Sample
+	for rows.Next() {
+		var x trips.Sample
+		if err := rows.Scan(&x.Time, &x.Gear, &x.SpeedKmh, &x.Latitude, &x.Longitude, &x.OdometerKm, &x.Soc, &x.PowerKW); err != nil {
+			return nil, err
+		}
+		out = append(out, x)
+	}
+	return out, rows.Err()
+}
+
+// LastTripEnd is when the newest saved trip for vin ended (zero if none).
+func (s *Store) LastTripEnd(ctx context.Context, vin string) (time.Time, error) {
+	var t *time.Time
+	err := s.db.QueryRow(ctx, `SELECT max(end_at) FROM trips WHERE vin = $1`, vin).Scan(&t)
+	if err != nil || t == nil {
+		return time.Time{}, err
+	}
+	return *t, nil
+}
+
+func (s *Store) SaveTrip(ctx context.Context, vin, source string, t trips.Trip) error {
+	summary, err := json.Marshal(t)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.Exec(ctx, `
+		INSERT INTO trips (vin, start_at, end_at, source, distance_km, summary) VALUES ($1, $2, $3, $4, $5, $6)
+		ON CONFLICT (vin, start_at) DO NOTHING`, vin, t.Start, t.End, source, t.DistanceKm, summary)
+	return err
+}
+
+// SavedTrip is a trip as stored.
+type SavedTrip struct {
+	ID     int64
+	Source string
+	trips.Trip
+}
+
+func (s *Store) ListTrips(ctx context.Context, vin string, limit int) ([]SavedTrip, error) {
+	rows, err := s.db.Query(ctx, `
+		SELECT id, source, summary - 'Path' FROM trips WHERE vin = $1 ORDER BY start_at DESC LIMIT $2`, vin, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []SavedTrip
+	for rows.Next() {
+		var t SavedTrip
+		var raw []byte
+		if err := rows.Scan(&t.ID, &t.Source, &raw); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(raw, &t.Trip); err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
+// GetTrip returns one trip with its route, or nil if it doesn't exist.
+func (s *Store) GetTrip(ctx context.Context, id int64) (*SavedTrip, error) {
+	t := &SavedTrip{ID: id}
+	var raw []byte
+	err := s.db.QueryRow(ctx, `SELECT source, summary FROM trips WHERE id = $1`, id).Scan(&t.Source, &raw)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return t, json.Unmarshal(raw, &t.Trip)
+}
+
+// TripSamples returns the full-resolution telemetry for a time range, for a trip's charts.
+func (s *Store) TripSamples(ctx context.Context, vin string, from, to time.Time) ([]trips.Sample, error) {
+	all, err := s.TelemetrySamples(ctx, vin, from.Add(-time.Nanosecond), 20000)
+	if err != nil {
+		return nil, err
+	}
+	for i, x := range all {
+		if x.Time.After(to) {
+			return all[:i], nil
+		}
+	}
+	return all, nil
 }

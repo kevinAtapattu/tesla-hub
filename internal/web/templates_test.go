@@ -9,6 +9,7 @@ import (
 	"github.com/kevin/tesla-hub/internal/poller"
 	"github.com/kevin/tesla-hub/internal/store"
 	"github.com/kevin/tesla-hub/internal/tesla"
+	"github.com/kevin/tesla-hub/internal/trips"
 )
 
 func TestTemplatesRender(t *testing.T) {
@@ -27,15 +28,22 @@ func TestTemplatesRender(t *testing.T) {
 			Runs:  []store.RuleRun{{RuleName: "Work", RanAt: time.Now(), Status: "done"}},
 		},
 	}
+	zt := 4800 * time.Millisecond
+	trip := trips.Trip{Start: time.Now().Add(-time.Hour), End: time.Now(), DistanceKm: 12.3, MaxSpeedKmh: 104, ZeroTo100: &zt,
+		SocStart: &f, SocEnd: &f, EnergyKWh: 2, Path: []trips.PathPoint{{Lat: 43.6, Lon: -79.8, Speed: 50}}}
+	pages[1].Trips = []store.SavedTrip{{ID: 1, Source: "telemetry", Trip: trip}, {ID: 2, Source: "polling", Trip: trip}}
+	pages[1].Trip = &store.SavedTrip{ID: 1, Source: "telemetry", Trip: trip}
+	pages[1].TripPath = template.JS(`[{"lat":43.6,"lon":-79.8,"s":50}]`)
+	pages[1].Live = &trip
 	for i, d := range pages {
-		for _, page := range []string{"dashboard", "controls", "schedules", "settings"} {
+		for _, page := range []string{"dashboard", "controls", "schedules", "settings", "trips", "trip"} {
 			d.Page = page
 			var sb strings.Builder
 			if err := tmpl.ExecuteTemplate(&sb, "index.html", d); err != nil {
 				t.Fatalf("data %d page %s: %v", i, page, err)
 			}
 		}
-		for _, name := range []string{"departures", "rules", "assistant-log", "telemetry-card"} {
+		for _, name := range []string{"departures", "rules", "assistant-log", "telemetry-card", "live-drive"} {
 			var sb strings.Builder
 			if err := tmpl.ExecuteTemplate(&sb, name, d); err != nil {
 				t.Fatalf("data %d partial %s: %v", i, name, err)

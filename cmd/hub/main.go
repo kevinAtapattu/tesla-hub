@@ -28,6 +28,7 @@ import (
 	"github.com/kevin/tesla-hub/internal/store"
 	"github.com/kevin/tesla-hub/internal/telemetry"
 	"github.com/kevin/tesla-hub/internal/tesla"
+	"github.com/kevin/tesla-hub/internal/trips"
 	"github.com/kevin/tesla-hub/internal/weather"
 	"github.com/kevin/tesla-hub/internal/web"
 )
@@ -97,13 +98,15 @@ func serve(ctx context.Context, cfg *config.Config) error {
 
 	go p.Run(ctx)
 	go sched.Run(ctx)
+	tripBuilder := &trips.Builder{Store: st, VIN: p.VIN}
+	go tripBuilder.Run(ctx)
 	var feed *telemetry.Receiver
 	if cfg.TelemetryHost != "" {
 		feed = &telemetry.Receiver{Addr: cfg.TelemetryZMQ, Store: st}
 		go feed.Run(ctx)
 	}
 
-	dash := &web.Server{Cfg: cfg, Auth: auth, Store: st, Poller: p, Commander: commander, Weather: &weather.Client{}, RunScheduler: sched.Nudge, Telemetry: feed}
+	dash := &web.Server{Cfg: cfg, Auth: auth, Store: st, Poller: p, Commander: commander, Weather: &weather.Client{}, RunScheduler: sched.Nudge, Telemetry: feed, Trips: tripBuilder}
 	dash.Assistant = assistant.New(cfg.AnthropicAPIKey, cfg.AssistantModel, dash.AssistantActions(), cfg.Location)
 	if dash.Assistant == nil {
 		slog.Info("assistant off: set ANTHROPIC_API_KEY to enable it")
