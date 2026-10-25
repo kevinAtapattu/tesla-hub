@@ -1,0 +1,81 @@
+{{define "schedules"}}
+<div class="page-head">
+  <div>
+    <h1>Schedules</h1>
+    <p>Preheat on a routine, like weekday mornings. Each schedule runs at most once a day.</p>
+  </div>
+</div>
+{{template "rules" .}}
+{{end}}
+
+{{define "rules"}}
+<div id="rules" class="stack">
+  <div class="card flush">
+    <h2 class="card-title">Your schedules <span class="muted" style="font-size:12px">{{len .Rules}} total</span></h2>
+    {{range .Rules}}
+    <div class="sched {{if not .Enabled}}off{{end}}">
+      <div class="t num">{{.AtTime}}</div>
+      <div class="body"><div style="font-weight:500">{{.Name}}</div>
+        <div>{{days .Days}} · {{.TempC}}°{{if .SeatHeat}} · seat heat{{end}}{{if .SteeringHeat}} · wheel heat{{end}}{{if .RadiusM}} · only within {{km .RadiusM}} of the saved spot{{end}}{{if .MaxOutsideTempC}} · only below {{f .MaxOutsideTempC}}°{{end}}</div></div>
+      <button class="switch {{if .Enabled}}on{{end}}" role="switch" aria-checked="{{.Enabled}}" aria-label="{{.Name}} on or off"
+        hx-post="/rules/{{.ID}}/toggle" hx-vals='{"enabled":"{{if .Enabled}}false{{else}}true{{end}}"}' hx-target="#rules" hx-swap="outerHTML"></button>
+      <button class="icon-btn" aria-label="Delete {{.Name}}" title="Delete" hx-delete="/rules/{{.ID}}" hx-confirm="Delete {{.Name}}?" hx-target="#rules" hx-swap="outerHTML">
+        <svg class="i" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>
+    </div>
+    {{else}}<div class="empty-note">No schedules yet. Add one below.</div>{{end}}
+  </div>
+
+  <div class="card">
+    <h2 class="card-title">Add a schedule</h2>
+    <form hx-post="/rules" hx-target="#rules" hx-swap="outerHTML" style="display:grid;gap:20px">
+      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))">
+        <label class="field">Name<input type="text" name="name" placeholder="Work mornings"></label>
+        <label class="field">Start at<input type="time" name="at_time" value="07:30" required></label>
+        <label class="field">Temperature °C<input type="number" name="temp_c" value="21" min="15" max="28" step="0.5"></label>
+      </div>
+      <div class="field"><span>Days</span>
+        <div class="days">
+          <label><input type="checkbox" name="days" value="1" checked><span>M</span></label>
+          <label><input type="checkbox" name="days" value="2" checked><span>T</span></label>
+          <label><input type="checkbox" name="days" value="3" checked><span>W</span></label>
+          <label><input type="checkbox" name="days" value="4" checked><span>T</span></label>
+          <label><input type="checkbox" name="days" value="5" checked><span>F</span></label>
+          <label><input type="checkbox" name="days" value="6"><span>S</span></label>
+          <label><input type="checkbox" name="days" value="0"><span>S</span></label>
+        </div></div>
+      <div style="display:grid;gap:12px">
+        <div class="chips">
+          <label class="check"><input type="checkbox" name="use_geofence" {{with .Latest}}{{if .Latitude}}checked{{end}}{{end}}> Only if the car is within</label>
+          <input type="number" name="radius_m" value="200" min="20" style="width:6em" aria-label="Radius in metres"> m of
+          <input type="text" name="latitude" value="{{with .Latest}}{{num .Latitude 5}}{{end}}" placeholder="Latitude" style="width:8em" aria-label="Latitude">
+          <input type="text" name="longitude" value="{{with .Latest}}{{num .Longitude 5}}{{end}}" placeholder="Longitude" style="width:8em" aria-label="Longitude">
+        </div>
+        <div class="chips">
+          <label class="check"><input type="checkbox" name="use_max_temp"> Only if it's colder than</label>
+          <input type="number" name="max_outside_temp_c" value="10" step="0.5" style="width:5.5em" aria-label="Max outside °C"> °C
+        </div>
+        <div class="chips" style="gap:20px">
+          <label class="check"><input type="checkbox" name="seat_heat"> Seat heat</label>
+          <label class="check"><input type="checkbox" name="steering_heat"> Steering wheel heat</label>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+        <span class="muted" style="font-size:13px">The location starts as where the car is now.</span>
+        <button class="btn primary lg">Save schedule</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="card flush">
+    <h2 class="card-title">Recent runs</h2>
+    {{if .Runs}}
+    <div class="table-wrap"><table>
+      <thead><tr><th>When</th><th>Schedule</th><th>Status</th><th>Details</th></tr></thead>
+      <tbody>
+        {{range .Runs}}<tr><td class="num" style="white-space:nowrap">{{local .RanAt}}</td><td>{{.RuleName}}</td><td>{{template "run-pill" .Status}}</td><td class="sub">{{if .Message}}{{.Message}}{{else}}—{{end}}</td></tr>{{end}}
+      </tbody>
+    </table></div>
+    {{else}}<div class="empty-note">Nothing has run yet.</div>{{end}}
+  </div>
+</div>
+{{end}}

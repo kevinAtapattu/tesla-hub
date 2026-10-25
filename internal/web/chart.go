@@ -15,6 +15,15 @@ type series struct {
 	Name  string
 	Class string // CSS class that sets the stroke colour
 	Value func(store.Point) *float64
+	Area  bool // shade the area under the line
+}
+
+// marker is the newest reading of a series, drawn in HTML so it stays round
+// while the SVG stretches.
+type marker struct {
+	X, Y  float64 // percent of the chart box
+	Class string
+	Label string
 }
 
 type chart struct {
@@ -23,6 +32,7 @@ type chart struct {
 	Bottom  string
 	XLabels []string
 	Legend  []series
+	Last    []marker
 	HasData bool
 }
 
@@ -71,32 +81,52 @@ func buildChart(pts []store.Point, from, to time.Time, loc *time.Location, unit 
 		fmt.Fprintf(&b, `<line class="grid" x1="0" x2="%.0f" y1="%.1f" y2="%.1f"/>`, w, gy, gy)
 	}
 	for _, s := range ss {
-		var d strings.Builder
+		// Split the series into runs, breaking wherever the car went quiet.
+		type xy struct{ x, y float64 }
+		var runs [][]xy
 		var last time.Time
-		run := 0
+		var lastV float64
 		for _, p := range pts {
 			v := s.Value(p)
 			if v == nil {
 				continue
 			}
-			if run > 0 && p.Time.Sub(last) > gap {
-				if run == 1 {
-					d.WriteString(" l0.1 0") // a lone sample still shows as a dot
+			if len(runs) == 0 || p.Time.Sub(last) > gap {
+				runs = append(runs, nil)
+			}
+			runs[len(runs)-1] = append(runs[len(runs)-1], xy{x(p.Time), y(*v)})
+			last, lastV = p.Time, *v
+		}
+		var line, area strings.Builder
+		for _, r := range runs {
+			for i, p := range r {
+				cmd := "L"
+				if i == 0 {
+					cmd = " M"
 				}
-				run = 0
+				fmt.Fprintf(&line, "%s%.1f %.1f", cmd, p.x, p.y)
 			}
-			cmd := "L"
-			if run == 0 {
-				cmd = " M"
+			if len(r) == 1 {
+				line.WriteString(" l0.1 0") // a lone sample still shows as a dot
 			}
-			fmt.Fprintf(&d, "%s%.1f %.1f", cmd, x(p.Time), y(*v))
-			last = p.Time
-			run++
+			if s.Area && len(r) > 1 {
+				fmt.Fprintf(&area, " M%.1f %.1f", r[0].x, h)
+				for _, p := range r {
+					fmt.Fprintf(&area, "L%.1f %.1f", p.x, p.y)
+				}
+				fmt.Fprintf(&area, "L%.1f %.1fZ", r[len(r)-1].x, h)
+			}
 		}
-		if run == 1 {
-			d.WriteString(" l0.1 0")
+		if area.Len() > 0 {
+			fmt.Fprintf(&b, `<path class="area %s" d="%s"/>`, s.Class, strings.TrimSpace(area.String()))
 		}
-		fmt.Fprintf(&b, `<path class="%s" d="%s"/>`, s.Class, strings.TrimSpace(d.String()))
+		fmt.Fprintf(&b, `<path class="%s" pathLength="1" d="%s"/>`, s.Class, strings.TrimSpace(line.String()))
+		if n := len(runs); n > 0 {
+			r := runs[n-1]
+			p := r[len(r)-1]
+			c.Last = append(c.Last, marker{X: p.x / w * 100, Y: p.y / h * 100, Class: s.Class,
+				Label: fmt.Sprintf("%.0f%s", lastV, unit)})
+		}
 	}
 	b.WriteString(`</svg>`)
 	c.SVG = template.HTML(b.String())

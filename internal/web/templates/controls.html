@@ -1,0 +1,62 @@
+{{define "controls"}}
+<div class="page-head">
+  <div>
+    <h1>Controls</h1>
+    <p>Commands wake the car first if it's asleep, which can take up to a minute.</p>
+  </div>
+  <div class="actions">{{template "car-status" .}}</div>
+</div>
+
+<div class="grid g2">
+  <div class="card span2">
+    <h2 class="card-title">Climate
+      {{with .Latest}}{{if yes .ClimateOn}}<span class="pill green"><span class="dot green pulse"></span>On · cabin {{num .InsideTempC 0}}°</span>{{else}}<span class="pill">Off{{if .InsideTempC}} · cabin {{num .InsideTempC 0}}°{{end}}</span>{{end}}{{end}}</h2>
+    <form hx-post="/climate/on" hx-target="#toast" hx-disabled-elt="find button[type=submit]" style="display:flex;flex-wrap:wrap;gap:16px 24px;align-items:center">
+      <div class="field"><span>Temperature</span>
+        <div class="stepper">
+          <button type="button" onclick="step('temp', -0.5)" aria-label="Cooler">−</button>
+          <input id="temp" type="number" name="temp_c" value="{{with .Latest}}{{if .DriverTempSetting}}{{num .DriverTempSetting 1}}{{else}}21{{end}}{{else}}21{{end}}" min="15" max="28" step="0.5" aria-label="Temperature °C">
+          <button type="button" onclick="step('temp', 0.5)" aria-label="Warmer">+</button>
+        </div></div>
+      <div style="display:grid;gap:10px">
+        <label class="check"><input type="checkbox" name="seat_heat"> Driver seat heat</label>
+        <label class="check"><input type="checkbox" name="steering_heat"> Steering wheel heat</label>
+      </div>
+      <div class="actions" style="margin-left:auto">
+        <button type="button" class="btn lg" hx-post="/climate/off" hx-target="#toast">Turn off</button>
+        <button type="submit" class="btn primary lg">
+          <svg class="i ico" viewBox="0 0 24 24"><path d="M12 9a4 4 0 0 0-2 7.5M12 3v2M6.6 18.4l-1.4 1.4M4 13H2M6.6 7.6 5.2 6.2M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z"/></svg>
+          <svg class="i spin" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.22-8.56"/></svg>
+          Start climate</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2 class="card-title">Doors &amp; security
+      {{with .Latest}}{{if yes .Locked}}<span class="pill">Locked</span>{{else}}<span class="pill amber">Unlocked</span>{{end}}{{end}}</h2>
+    <div class="btn-grid">
+      <button class="btn lg" hx-post="/cmd/lock" hx-target="#toast"><svg class="i" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Lock</button>
+      <button class="btn lg" hx-post="/cmd/unlock" hx-target="#toast" hx-confirm="Unlock the car?"><svg class="i" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.75-1.4"/></svg>Unlock</button>
+      <button class="btn lg" hx-post="/cmd/sentry_on" hx-target="#toast"><svg class="i" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>Sentry on</button>
+      <button class="btn lg" hx-post="/cmd/sentry_off" hx-target="#toast"><svg class="i" viewBox="0 0 24 24"><path d="M9.9 4.24A9 9 0 0 1 12 4c6.5 0 10 7 10 7a17 17 0 0 1-2.16 3.19M6.6 6.6A17 17 0 0 0 2 12s3.5 7 10 7a9.7 9.7 0 0 0 5.4-1.6M2 2l20 20"/></svg>Sentry off</button>
+      <button class="btn lg" hx-post="/cmd/flash" hx-target="#toast"><svg class="i" viewBox="0 0 24 24"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2Z"/></svg>Flash lights</button>
+      <button class="btn lg" hx-post="/cmd/honk" hx-target="#toast" hx-confirm="Honk the horn?"><svg class="i" viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/></svg>Honk</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 class="card-title">Charging {{with .Latest}}{{template "charge-pill" .}}{{end}}</h2>
+    {{with .Latest}}{{if .BatteryLevel}}
+    <div class="row"><span>Battery</span><span class="num">{{int .BatteryLevel}}% of {{int .ChargeLimit}}% limit</span></div>
+    <div class="bar {{if .Charging}}charging{{else if le (pct .BatteryLevel) 20}}low{{end}}" style="margin-bottom:16px"><i style="width:{{pct .BatteryLevel}}%"></i>{{if .ChargeLimit}}<b style="left:{{pct .ChargeLimit}}%"></b>{{end}}</div>
+    {{end}}{{end}}
+    <div class="btn-grid">
+      <button class="btn lg" hx-post="/cmd/charge_start" hx-target="#toast"><svg class="i" viewBox="0 0 24 24"><path d="m6 3 14 9-14 9V3Z"/></svg>Start</button>
+      <button class="btn lg" hx-post="/cmd/charge_stop" hx-target="#toast"><svg class="i" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>Stop</button>
+      <button class="btn lg" hx-post="/cmd/port_open" hx-target="#toast"><svg class="i" viewBox="0 0 24 24"><path d="M12 22v-5M9 8V2M15 8V2M18 8v5a6 6 0 0 1-12 0V8Z"/></svg>Open port</button>
+      <button class="btn lg" hx-post="/cmd/port_close" hx-target="#toast"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 12h6"/></svg>Close port</button>
+    </div>
+  </div>
+</div>
+{{end}}

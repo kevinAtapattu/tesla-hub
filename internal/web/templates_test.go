@@ -19,17 +19,25 @@ func TestTemplatesRender(t *testing.T) {
 		{
 			Connected: true, SetupDone: true, Domain: "me.github.io", Budget: 4000,
 			Status: poller.Status{VIN: "V", Name: "Model 3", State: "online", LastCheck: time.Now()},
-			Latest: &tesla.Snapshot{Time: time.Now(), BatteryLevel: &n, RangeKm: &f, Latitude: &f, Longitude: &f, ClimateOn: &b, Locked: &b},
-			Usage:  map[string]int{"data": 12},
-			Rules:  []*store.Rule{{ID: 1, Name: "Work", Enabled: true, Days: "1,2,3,4,5", AtTime: "07:30", TempC: 21, Latitude: &f, Longitude: &f, RadiusM: &f}},
-			Runs:   []store.RuleRun{{RuleName: "Work", RanAt: time.Now(), Status: "done"}},
+			Latest: &tesla.Snapshot{Time: time.Now(), BatteryLevel: &n, RangeKm: &f, Latitude: &f, Longitude: &f, ClimateOn: &b, Locked: &b,
+				ChargingState: "Charging", ChargeLimit: &n, Heading: &n},
+			Usage: map[string]int{"data": 12},
+			Rules: []*store.Rule{{ID: 1, Name: "Work", Enabled: true, Days: "1,2,3,4,5", AtTime: "07:30", TempC: 21, Latitude: &f, Longitude: &f, RadiusM: &f}},
+			Runs:  []store.RuleRun{{RuleName: "Work", RanAt: time.Now(), Status: "done"}},
 		},
 	}
 	for i, d := range pages {
-		for _, name := range []string{"index.html", "departures", "rules"} {
+		for _, page := range []string{"dashboard", "controls", "schedules", "settings"} {
+			d.Page = page
+			var sb strings.Builder
+			if err := tmpl.ExecuteTemplate(&sb, "index.html", d); err != nil {
+				t.Fatalf("data %d page %s: %v", i, page, err)
+			}
+		}
+		for _, name := range []string{"departures", "rules"} {
 			var sb strings.Builder
 			if err := tmpl.ExecuteTemplate(&sb, name, d); err != nil {
-				t.Fatalf("page %d template %s: %v", i, name, err)
+				t.Fatalf("data %d partial %s: %v", i, name, err)
 			}
 		}
 	}

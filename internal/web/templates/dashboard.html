@@ -1,0 +1,206 @@
+{{define "dashboard"}}
+<div id="live" hx-get="/?range={{.Range}}" hx-select="#live" hx-select-oob="#history,#weather" hx-swap="outerHTML"
+     hx-trigger="every 60s, commandDone from:body delay:5s">
+  <div class="page-head">
+    <div>
+      <h1>Dashboard</h1>
+      <p>{{if .Status.Name}}{{.Status.Name}}{{else}}Your Tesla{{end}}{{with .Latest}} · Updated <span title="{{local .Time}}">{{ago .Time}}</span>{{end}}</p>
+    </div>
+    <div class="actions">
+      {{template "car-status" .}}
+      <button class="btn primary" hx-post="/refresh" hx-target="#toast">
+        <svg class="i ico" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"/><path d="M21 3v5h-5"/></svg>
+        <svg class="i spin" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.22-8.56"/></svg>
+        Refresh</button>
+    </div>
+  </div>
+
+  {{if .Status.LastErr}}
+  <div class="notice"><svg class="i" viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>
+    <div>The last check failed: {{.Status.LastErr}}</div></div>
+  {{end}}
+
+  {{if not .Latest}}
+  <div class="card">
+    <h2 class="card-title">{{if .Connected}}Waiting for the car{{else}}Connect your Tesla{{end}}</h2>
+    <p class="muted" style="margin:0">Stats, charts and weather show up here once the car reports in.</p>
+    <ol class="steps">
+      <li class="{{if .Connected}}done{{end}}"><span class="n">1</span><div class="txt">Connect your Tesla account{{if not .Connected}} <a class="btn primary sm" href="/auth/login" style="margin-left:6px">Connect</a>{{end}}</div></li>
+      <li><span class="n">2</span><div class="txt">Pair the key: open <code>https://tesla.com/_ak/{{.Domain}}</code> on your phone, then tap your key card in the car</div></li>
+      <li><span class="n">3</span><div class="txt">Wake the car by opening the Tesla app, then press <b>Refresh</b></div></li>
+    </ol>
+  </div>
+  {{else}}{{with .Latest}}
+  <div class="grid g4" style="margin-bottom:16px">
+    <div class="card stat"><div class="label">Battery</div>
+      <div class="value">{{nf "s-batt" .BatteryLevel 0}}<span class="unit">%</span></div>
+      <div class="hint">{{if .ChargeLimit}}Charge limit {{int .ChargeLimit}}%{{else}}&nbsp;{{end}}</div></div>
+    <div class="card stat"><div class="label">Range</div>
+      <div class="value">{{nf "s-range" .RangeKm 0}}<span class="unit">km</span></div>
+      <div class="hint">Estimated</div></div>
+    <div class="card stat"><div class="label">Cabin</div>
+      <div class="value">{{nf "s-cabin" .InsideTempC 1}}<span class="unit">°C</span></div>
+      <div class="hint">{{if yes .ClimateOn}}Climate on · set {{num .DriverTempSetting 0}}°{{else}}Climate off{{end}}</div></div>
+    <div class="card stat"><div class="label">Outside</div>
+      <div class="value">{{if $.Weather}}{{nf "s-out" $.Weather.TempC 0}}{{else}}{{nf "s-out" .OutsideTempC 0}}{{end}}<span class="unit">°C</span></div>
+      <div class="hint">{{if $.Weather}}{{$.Weather.Summary}}{{else}}Car sensor{{end}}</div></div>
+  </div>
+
+  <div class="grid g2">
+    {{if .Charging}}
+    <div class="card span2">
+      <h2 class="card-title">Charging <span class="pill green"><span class="dot green pulse"></span>{{.ChargingState}}</span></h2>
+      <div class="grid g4" style="gap:16px">
+        <div><div class="muted">Power</div><div class="big">{{nf "c-power" .ChargerPowerKW 0}}<span class="unit">kW</span></div></div>
+        <div><div class="muted">Adding</div><div class="big">{{nf "c-rate" .ChargeRateKmh 0}}<span class="unit">km/h</span></div></div>
+        <div><div class="muted">Energy added</div><div class="big">{{nf "c-energy" .EnergyAddedKWh 1}}<span class="unit">kWh</span></div></div>
+        <div><div class="muted">Full in</div><div class="big num">{{dur .MinutesToFull}}</div></div>
+      </div>
+    </div>
+    {{end}}
+
+    <div class="card">
+      <h2 class="card-title">Battery</h2>
+      <div class="rows">
+        <div>
+          <div class="row"><span>Charge level</span><span class="big">{{nf "b-level" .BatteryLevel 0}}<span class="unit">%</span></span></div>
+          <div class="bar {{if .Charging}}charging{{else if le (pct .BatteryLevel) 20}}low{{end}}">
+            <i style="width:{{pct .BatteryLevel}}%"></i>{{if .ChargeLimit}}<b style="left:{{pct .ChargeLimit}}%" title="Charge limit {{int .ChargeLimit}}%"></b>{{end}}</div>
+        </div>
+        <div class="row"><span>Range</span><span class="num">{{num .RangeKm 0}} km</span></div>
+        <div class="row"><span>Charge limit</span><span class="num">{{int .ChargeLimit}}%</span></div>
+        <div class="row"><span>Status</span>{{template "charge-pill" .}}</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 class="card-title">Location {{if .Latitude}}<a class="link" target="_blank" rel="noopener" href="https://maps.apple.com/?ll={{num .Latitude 6}},{{num .Longitude 6}}&q=My%20car">Open in Maps
+        <svg class="i" viewBox="0 0 24 24" style="width:12px;height:12px"><path d="M7 17 17 7M8 7h9v9"/></svg></a>{{end}}</h2>
+      {{if .Latitude}}
+      <iframe class="map" id="map-{{num .Latitude 4}}-{{num .Longitude 4}}" hx-preserve="true" loading="lazy" title="Car location"
+        src="https://www.openstreetmap.org/export/embed.html?bbox={{lon .Longitude -0.006}}%2C{{lat .Latitude -0.003}}%2C{{lon .Longitude 0.006}}%2C{{lat .Latitude 0.003}}&layer=mapnik&marker={{num .Latitude 6}}%2C{{num .Longitude 6}}"></iframe>
+      <div class="rows">
+        <div class="row"><span>Latitude</span><span class="mono">{{num .Latitude 4}}</span></div>
+        <div class="row"><span>Longitude</span><span class="mono">{{num .Longitude 4}}</span></div>
+        <div class="row"><span>Heading</span><span class="num">{{compass .Heading}}</span></div>
+      </div>
+      {{else}}<div class="nochart" style="height:200px">No location yet. Approve "Vehicle Location" when connecting your account.</div>{{end}}
+    </div>
+
+    <div class="card">
+      <h2 class="card-title">Vehicle</h2>
+      <div class="rows">
+        <div class="row"><span>Name</span><span>{{if $.Status.Name}}{{$.Status.Name}}{{else}}Tesla{{end}}</span></div>
+        <div class="row"><span>Doors</span>{{if yes .Locked}}<span class="pill">Locked</span>{{else}}<span class="pill amber">Unlocked</span>{{end}}</div>
+        <div class="row"><span>Sentry Mode</span>{{if yes .Sentry}}<span class="pill green">On</span>{{else}}<span class="pill">Off</span>{{end}}</div>
+        <div class="row"><span>Odometer</span><span>{{nf "v-odo" .OdometerKm 0}} km</span></div>
+        <div class="row"><span>Driven today</span><span>{{nf "v-today" $.TodayKm 1}} km</span></div>
+        <div class="row"><span>Software</span><span class="num">{{if .CarVersion}}{{.CarVersion}}{{else}}—{{end}}</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 class="card-title">Climate <a class="link" href="/controls">Controls
+        <svg class="i" viewBox="0 0 24 24" style="width:12px;height:12px"><path d="m9 18 6-6-6-6"/></svg></a></h2>
+      <div class="rows">
+        <div class="row"><span>Cabin</span><span class="big">{{nf "cl-cabin" .InsideTempC 1}}<span class="unit">°C</span></span></div>
+        <div class="row"><span>Climate</span>{{if yes .ClimateOn}}<span class="pill green"><span class="dot green pulse"></span>On</span>{{else}}<span class="pill">Off</span>{{end}}</div>
+        <div class="row"><span>Set to</span><span class="num">{{num .DriverTempSetting 1}} °C</span></div>
+        <div class="row"><span>Outside (car sensor)</span><span class="num">{{num .OutsideTempC 1}} °C</span></div>
+      </div>
+    </div>
+  </div>
+  {{end}}{{end}}
+</div>
+
+<div class="grid g2" style="margin-top:16px">
+  <section class="card">{{template "departures" .}}</section>
+  <section class="card" id="weather">
+    <h2 class="card-title">Weather {{with .Weather}}<span class="muted" style="font-size:12px">at the car · Open-Meteo</span>{{end}}</h2>
+    {{with .Weather}}
+    <div class="wx">
+      <span class="big">{{printf "%.0f" .TempC}}<span class="unit">°C</span></span>
+      <div><div style="font-weight:600">{{.Summary}}</div>
+        <div class="muted">Feels like {{printf "%.0f" .FeelsLikeC}}° · wind {{printf "%.0f" .WindKmh}} km/h</div></div>
+    </div>
+    <div class="hours">
+      {{range $i, $h := .Hours}}{{if and (lt $i 12) (eq (mod $i 2) 0)}}<div>{{hour $h.Time}}<b class="num">{{printf "%.0f" $h.TempC}}°</b>{{if ge $h.PrecipProb 20}}{{$h.PrecipProb}}% rain{{else}}{{sky $h.Code}}{{end}}</div>{{end}}{{end}}
+    </div>
+    {{else}}<div class="nochart">Shows up once the car reports its location.</div>{{end}}
+  </section>
+</div>
+
+<div id="history" style="margin-top:16px">
+  {{if .Latest}}
+  <div class="page-head" style="margin:32px 0 16px;align-items:center">
+    <div><h1 style="font-size:16px">History</h1><p style="font-size:13px">Readings every 2 to 20 minutes while the car is awake</p></div>
+    <span class="seg"><a href="/?range=24h" class="{{if eq .Range "24h"}}on{{end}}">24 hours</a><a href="/?range=7d" class="{{if eq .Range "7d"}}on{{end}}">7 days</a></span>
+  </div>
+  <div class="grid g2">
+    <div class="card"><h2 class="card-title">Battery {{template "legend" .Battery.Legend}}</h2>{{template "chart" .Battery}}</div>
+    <div class="card"><h2 class="card-title">Temperature {{template "legend" .Temps.Legend}}</h2>{{template "chart" .Temps}}</div>
+    <div class="card span2"><h2 class="card-title">Speed · km/h <span class="muted" style="font-size:12px">sampled every {{.DrivingEvery}} while driving</span></h2>{{template "chart" .Speed}}</div>
+  </div>
+  {{end}}
+</div>
+{{end}}
+
+{{define "legend"}}<span class="legend">{{range .}}<span><i class="{{.Class}}"></i>{{.Name}}</span>{{end}}</span>{{end}}
+
+{{define "car-status"}}
+{{with .Latest}}
+  {{if eq $.Status.State "asleep"}}<span class="pill"><span class="dot"></span>Asleep</span>
+  {{else if eq $.Status.State "offline"}}<span class="pill"><span class="dot"></span>Offline</span>
+  {{else if .Driving}}<span class="pill green"><span class="dot green pulse"></span>Driving{{if .SpeedKmh}} · {{num .SpeedKmh 0}} km/h{{end}}</span>
+  {{else if .Charging}}<span class="pill green"><span class="dot green pulse"></span>Charging</span>
+  {{else}}<span class="pill"><span class="dot {{if eq $.Status.State "online"}}green{{end}}"></span>Parked</span>{{end}}
+{{else}}
+  {{if .Connected}}<span class="pill"><span class="dot"></span>Waiting for data</span>{{else}}<span class="pill amber">Not connected</span>{{end}}
+{{end}}
+{{end}}
+
+{{define "charge-pill"}}
+{{if .Charging}}<span class="pill green">Charging</span>
+{{else if eq .ChargingState "Complete"}}<span class="pill green">Complete</span>
+{{else if eq .ChargingState "Stopped"}}<span class="pill amber">Stopped</span>
+{{else if eq .ChargingState "Disconnected"}}<span class="pill">Unplugged</span>
+{{else if .ChargingState}}<span class="pill">{{.ChargingState}}</span>
+{{else}}<span>—</span>{{end}}
+{{end}}
+
+{{define "departures"}}
+<div id="departures">
+  <h2 class="card-title">Leaving soon?</h2>
+  <p class="muted" style="margin:-8px 0 16px;font-size:13px">Heats or cools the car in time, based on the weather.</p>
+  <div class="chips">
+    <button class="btn primary" hx-post="/depart" hx-vals='{"minutes":"0"}' hx-target="#departures" hx-swap="outerHTML">Now</button>
+    <button class="btn" hx-post="/depart" hx-vals='{"minutes":"10"}' hx-target="#departures" hx-swap="outerHTML">10 min</button>
+    <button class="btn" hx-post="/depart" hx-vals='{"minutes":"20"}' hx-target="#departures" hx-swap="outerHTML">20 min</button>
+    <button class="btn" hx-post="/depart" hx-vals='{"minutes":"30"}' hx-target="#departures" hx-swap="outerHTML">30 min</button>
+    <form hx-post="/depart" hx-target="#departures" hx-swap="outerHTML"><input type="time" name="at" required aria-label="Departure time"><button class="btn">Set</button></form>
+  </div>
+  {{if .Notice}}<div class="callout">{{.Notice}}</div>
+  {{else if .Preview}}<div class="callout"><b>If you left in 15 min:</b> {{.Preview.Reason}}</div>{{end}}
+  {{if .Departures}}
+  <div class="rows" style="margin-top:16px">
+    {{range .Departures}}
+    <div class="row" style="align-items:flex-start;padding-top:12px;border-top:1px solid var(--line)">
+      <span style="color:var(--text);font-weight:600" class="num">{{clock .DepartAt}}</span>
+      <span style="flex:1;text-align:left;font-weight:400">{{.Reason}}{{if .Message}}<div class="muted" style="font-size:13px">{{.Message}}</div>{{end}}</span>
+      <span style="display:flex;gap:8px;align-items:center">{{template "run-pill" .Status}}
+        {{if eq .Status "pending"}}<button class="btn sm" hx-delete="/departures/{{.ID}}" hx-target="#departures" hx-swap="outerHTML">Cancel</button>{{end}}</span>
+    </div>
+    {{end}}
+  </div>
+  {{end}}
+</div>
+{{end}}
+
+{{define "run-pill"}}
+{{if eq . "done"}}<span class="pill green">Done</span>
+{{else if or (eq . "failed") (eq . "missed")}}<span class="pill red">{{if eq . "failed"}}Failed{{else}}Missed{{end}}</span>
+{{else if eq . "pending"}}<span class="pill amber">Scheduled</span>
+{{else if eq . "running"}}<span class="pill amber"><span class="dot amber pulse"></span>Running</span>
+{{else if eq . "skipped"}}<span class="pill">Skipped</span>
+{{else}}<span class="pill">{{.}}</span>{{end}}
+{{end}}

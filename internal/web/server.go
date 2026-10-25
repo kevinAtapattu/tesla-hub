@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"html/template"
 	"log/slog"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -45,7 +46,10 @@ func (s *Server) Handler() http.Handler {
 	s.tmpl = template.Must(template.New("").Funcs(funcs(s.Cfg.Location)).ParseFS(templateFS, "templates/*.html"))
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /{$}", s.home)
+	mux.HandleFunc("GET /{$}", s.page("dashboard"))
+	mux.HandleFunc("GET /controls", s.page("controls"))
+	mux.HandleFunc("GET /schedules", s.page("schedules"))
+	mux.HandleFunc("GET /settings", s.page("settings"))
 	mux.HandleFunc("GET /auth/login", s.login)
 	mux.HandleFunc("GET /auth/callback", s.callback) // must stay public: Tesla redirects here
 	mux.HandleFunc("POST /auth/logout", s.logout)
@@ -90,6 +94,7 @@ type setupStep struct {
 }
 
 type pageData struct {
+	Page      string // which sidebar page is shown
 	Status    poller.Status
 	Latest    *tesla.Snapshot
 	Usage     map[string]int
@@ -155,10 +160,10 @@ func (s *Server) data(ctx context.Context, rangeParam string) pageData {
 		}
 		loc := s.Cfg.Location
 		zero, hundred := 0.0, 100.0
-		d.Battery = buildChart(pts, from, to, loc, "%", &zero, &hundred, series{"Battery", "s-battery", batteryOf})
+		d.Battery = buildChart(pts, from, to, loc, "%", &zero, &hundred, series{Name: "Battery", Class: "s-battery", Value: batteryOf, Area: true})
 		d.Temps = buildChart(pts, from, to, loc, "°", nil, nil,
-			series{"Cabin", "s-inside", insideOf}, series{"Outside (car sensor)", "s-outside", outsideOf})
-		d.Speed = buildChart(pts, from, to, loc, " km/h", &zero, nil, series{"Speed km/h", "s-speed", speedOf})
+			series{Name: "Cabin", Class: "s-inside", Value: insideOf}, series{Name: "Outside (car sensor)", Class: "s-outside", Value: outsideOf})
+		d.Speed = buildChart(pts, from, to, loc, "", &zero, nil, series{Name: "Speed", Class: "s-speed", Value: speedOf, Area: true})
 
 		local := d.Now.In(loc)
 		midnight := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, loc)
@@ -202,11 +207,14 @@ func (s *Server) plan(latest *tesla.Snapshot, wx *weather.Report, now, departAt 
 	return planner.Make(in)
 }
 
-func (s *Server) home(w http.ResponseWriter, r *http.Request) {
-	d := s.data(r.Context(), r.URL.Query().Get("range"))
-	d.Flash = r.URL.Query().Get("flash")
-	d.Error = r.URL.Query().Get("error")
-	s.render(w, "index.html", d)
+func (s *Server) page(name string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		d := s.data(r.Context(), r.URL.Query().Get("range"))
+		d.Page = name
+		d.Flash = r.URL.Query().Get("flash")
+		d.Error = r.URL.Query().Get("error")
+		s.render(w, "index.html", d)
+	}
 }
 
 func (s *Server) rulesPartial(w http.ResponseWriter, r *http.Request) {
@@ -256,7 +264,7 @@ func (s *Server) callback(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	s.Auth.Disconnect(r.Context())
-	http.Redirect(w, r, "/?flash="+urlq("Disconnected"), http.StatusSeeOther)
+	http.Redirect(w, r, "/settings?flash="+urlq("Disconnected"), http.StatusSeeOther)
 }
 
 // --- controls (htmx endpoints return a small message fragment) ---
@@ -432,9 +440,15 @@ func (s *Server) renderDepartures(w http.ResponseWriter, r *http.Request, notice
 
 // --- helpers ---
 
+// msg writes a toast. kind is "ok" or "err".
 func msg(w http.ResponseWriter, kind, text string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	fmt.Fprintf(w, `<div class="msg %s">%s</div>`, kind, template.HTMLEscapeString(text))
+	icon := `<path d="M20 6 9 17l-5-5"/>`
+	if kind == "err" {
+		icon = `<circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/>`
+	}
+	fmt.Fprintf(w, `<div class="msg %s" role="status"><svg viewBox="0 0 24 24" aria-hidden="true">%s</svg><span>%s</span></div>`,
+		kind, icon, template.HTMLEscapeString(text))
 }
 
 func urlq(s string) string { return strings.ReplaceAll(template.URLQueryEscaper(s), "+", "%20") }
@@ -464,7 +478,34 @@ func funcs(loc *time.Location) template.FuncMap {
 			}
 			return t.In(loc).Format("3:04 PM")
 		},
-		"mod":  func(a, b int) int { return a % b },
+		"mod": func(a, b int) int { return a % b },
+		"nf":  rollingNumber,
+		"inc": func(i int) int { return i + 1 },
+		"dur": func(mins *int) string {
+			switch {
+			case mins == nil:
+				return "—"
+			case *mins < 60:
+				return fmt.Sprintf("%d min", *mins)
+			case *mins%60 == 0:
+				return fmt.Sprintf("%d h", *mins/60)
+			}
+			return fmt.Sprintf("%d h %d min", *mins/60, *mins%60)
+		},
+		"compass": func(deg *int) string {
+			if deg == nil {
+				return "—"
+			}
+			dirs := []string{"N", "NE", "E", "SE", "S", "SW", "W", "NW"}
+			return fmt.Sprintf("%s · %d°", dirs[((*deg%360+360)%360+22)/45%8], *deg)
+		},
+		"usageTotal": usageTotal,
+		"usagePct": func(u map[string]int, budget int) int {
+			if budget <= 0 {
+				return 0
+			}
+			return min(usageTotal(u)*100/budget, 100)
+		},
 		"hour": func(t time.Time) string { return t.In(loc).Format("3 PM") },
 		"sky":  weather.Describe,
 		// fresh grades how old a reading is so stale data is visibly stale.
@@ -555,4 +596,48 @@ func offsetCoord(p *float64, d float64) string {
 		return "0"
 	}
 	return strconv.FormatFloat(*p+d, 'f', 6, 64)
+}
+
+// rollingNumber renders a number the page animates into place (see the
+// number-flow script in index.html). key ties it to the same number after an
+// auto-refresh so it rolls from the old value; the text inside is the no-JS fallback.
+func rollingNumber(key string, v any, digits int) template.HTML {
+	var f float64
+	switch x := v.(type) {
+	case *float64:
+		if x == nil {
+			return "—"
+		}
+		f = *x
+	case *int:
+		if x == nil {
+			return "—"
+		}
+		f = float64(*x)
+	case float64:
+		f = x
+	case int:
+		f = float64(x)
+	default:
+		return "—"
+	}
+	n := strconv.FormatFloat(f, 'f', digits, 64)
+	if math.Abs(f) >= 10000 { // 12345 -> 12,345
+		i := strings.IndexAny(n, ".")
+		if i < 0 {
+			i = len(n)
+		}
+		for j := i - 3; j > 0 && n[j-1] != '-'; j -= 3 {
+			n = n[:j] + "," + n[j:]
+		}
+	}
+	return template.HTML(fmt.Sprintf(`<span class="num" data-nf data-key="%s">%s</span>`, template.HTMLEscapeString(key), n))
+}
+
+func usageTotal(u map[string]int) int {
+	n := 0
+	for _, v := range u {
+		n += v
+	}
+	return n
 }

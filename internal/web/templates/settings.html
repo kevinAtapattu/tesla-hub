@@ -1,0 +1,56 @@
+{{define "settings"}}
+<div class="page-head">
+  <div>
+    <h1>Settings</h1>
+    <p>Your Tesla connection, setup and API usage.</p>
+  </div>
+</div>
+
+<div class="grid g2">
+  <div class="card">
+    <h2 class="card-title">Tesla account {{if .Connected}}<span class="pill green">Connected</span>{{else}}<span class="pill amber">Not connected</span>{{end}}</h2>
+    <div class="rows">
+      <div class="row"><span>Vehicle</span><span>{{if .Status.Name}}{{.Status.Name}}{{else}}—{{end}}</span></div>
+      <div class="row"><span>VIN</span><span class="mono">{{if .Status.VIN}}{{.Status.VIN}}{{else}}—{{end}}</span></div>
+      <div class="row"><span>App domain</span><span class="mono">{{if .Domain}}{{.Domain}}{{else}}—{{end}}</span></div>
+      <div class="row"><span>Last check</span><span>{{ago .Status.LastCheck}}</span></div>
+    </div>
+    <div class="divider"></div>
+    {{if .Connected}}
+    <form method="post" action="/auth/logout" onsubmit="return confirm('Disconnect your Tesla account? Polling and schedules stop until you connect again.')">
+      <button class="btn danger">Disconnect</button></form>
+    {{else}}<a class="btn primary" href="/auth/login">Connect Tesla account</a>{{end}}
+  </div>
+
+  <div class="card">
+    <h2 class="card-title">Setup {{if .SetupDone}}<span class="pill green">Complete</span>{{end}}</h2>
+    <ol class="steps" style="margin:0">
+      {{range $i, $s := .Setup}}
+      <li class="{{if $s.Done}}done{{end}}"><span class="n">{{if $s.Done}}<svg class="i" viewBox="0 0 24 24" style="width:12px;height:12px;stroke-width:3"><path d="M20 6 9 17l-5-5"/></svg>{{else}}{{inc $i}}{{end}}</span>
+        <div class="txt">{{$s.Title}}{{if not $s.Done}}<div class="muted" style="font-size:13px">{{$s.Detail}}</div>{{end}}</div></li>
+      {{end}}
+    </ol>
+  </div>
+
+  <div class="card span2">
+    <h2 class="card-title">API usage this month <span class="muted" style="font-size:12px">Tesla bills per request · the first $10 each month is free</span></h2>
+    <div class="grid g4">
+      <div><div class="muted">Data requests</div><div class="big">{{nf "u-data" (index .Usage "data") 0}}</div></div>
+      <div><div class="muted">Commands</div><div class="big">{{nf "u-cmd" (index .Usage "command") 0}}</div></div>
+      <div><div class="muted">Wake-ups</div><div class="big">{{nf "u-wake" (index .Usage "wake") 0}}</div></div>
+      <div><div class="muted">Estimated cost</div><div class="big">$<span>{{nf "u-cost" .UsageCost 2}}</span></div></div>
+    </div>
+    <div class="usage-bar"><i style="width:{{usagePct .Usage .Budget}}%"></i></div>
+    <div class="muted" style="font-size:13px">{{usageTotal .Usage}} of {{.Budget}} requests. Polling pauses for the rest of the month at the limit.</div>
+  </div>
+
+  <div class="card span2">
+    <h2 class="card-title">More</h2>
+    <div class="rows">
+      <div class="row"><span>Detailed charts and history</span><a class="btn sm" href="http://localhost:3095" target="_blank" rel="noopener">Open Grafana</a></div>
+      <div class="row"><span>Pair the virtual key again</span><span class="mono">tesla.com/_ak/{{.Domain}}</span></div>
+      <div class="row"><span>Appearance</span><button class="btn sm" onclick="theme.toggle()"><span class="show-dark">Use light mode</span><span class="show-light">Use dark mode</span></button></div>
+    </div>
+  </div>
+</div>
+{{end}}

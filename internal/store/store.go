@@ -92,11 +92,11 @@ func (s *Store) LatestSnapshot(ctx context.Context, vin string) (*tesla.Snapshot
 	err := s.db.QueryRow(ctx, `
 		SELECT time, battery_level, range_km, charging_state, charge_limit, charger_power_kw, inside_temp_c,
 			outside_temp_c, climate_on, driver_temp_setting, latitude, longitude, speed_kmh, shift_state,
-			odometer_km, locked, sentry, car_version
+			odometer_km, locked, sentry, car_version, raw
 		FROM vehicle_states WHERE vin = $1 ORDER BY time DESC LIMIT 1`, vin).
 		Scan(&v.Time, &v.BatteryLevel, &v.RangeKm, &charging, &v.ChargeLimit, &v.ChargerPowerKW, &v.InsideTempC,
 			&v.OutsideTempC, &v.ClimateOn, &v.DriverTempSetting, &v.Latitude, &v.Longitude, &v.SpeedKmh, &shift,
-			&v.OdometerKm, &v.Locked, &v.Sentry, &version)
+			&v.OdometerKm, &v.Locked, &v.Sentry, &version, &v.Raw)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -104,6 +104,11 @@ func (s *Store) LatestSnapshot(ctx context.Context, vin string) (*tesla.Snapshot
 		return nil, err
 	}
 	v.ChargingState, v.ShiftState, v.CarVersion = deref(charging), deref(shift), deref(version)
+	// Fields without their own column (heading, charging details) come from the raw response.
+	if full, err := tesla.ParseVehicleData(v.Raw); err == nil {
+		v.Heading, v.EnergyAddedKWh, v.MinutesToFull, v.ChargeRateKmh =
+			full.Heading, full.EnergyAddedKWh, full.MinutesToFull, full.ChargeRateKmh
+	}
 	return v, nil
 }
 

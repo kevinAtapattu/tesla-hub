@@ -4,386 +4,419 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>{{if .Status.Name}}{{.Status.Name}}{{else}}Tesla Hub{{end}}</title>
+<script>
+  // Apply the saved theme before first paint so there's no flash.
+  (function () {
+    var t; try { t = localStorage.getItem("theme"); } catch (e) {}
+    if (t === "dark" || (!t && matchMedia("(prefers-color-scheme: dark)").matches)) document.documentElement.classList.add("dark");
+  })();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js"></script>
 <style>
   :root {
-    --bg: #f4f5f7; --card: #ffffff; --ink: #14161a; --muted: #6b7280; --faint: #9ca3af; --line: #e5e7eb; --soft: #f1f2f4;
-    --accent: #2563eb; --green: #16a34a; --amber: #d97706; --red: #dc2626; --blue: #0284c7; --violet: #7c3aed;
+    --bg: #fafafa; --surface: #ffffff; --sidebar: #ffffff; --line: #e5e5e5; --line-strong: #d4d4d4;
+    --text: #171717; --muted: #737373; --faint: #a3a3a3; --hover: #f5f5f5; --track: #f5f5f5;
+    --primary: #171717; --primary-ink: #ffffff; --primary-hover: #404040;
+    --green-bg: #f0fdf4; --green-ink: #15803d; --green-ring: rgba(22,163,74,.2); --green: #22c55e;
+    --amber-bg: #fffbeb; --amber-ink: #b45309; --amber-ring: rgba(217,119,6,.2); --amber: #f59e0b;
+    --red-bg: #fef2f2; --red-ink: #b91c1c; --red-ring: rgba(220,38,38,.2); --red: #ef4444;
+    --sky: #0ea5e9; --violet: #8b5cf6;
+    --shadow: 0 1px 2px rgba(0,0,0,.04);
+    --shadow-lg: 0 10px 30px -8px rgba(0,0,0,.18), 0 2px 6px rgba(0,0,0,.06);
     color-scheme: light;
   }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg: #0b0c0e; --card: #15171a; --ink: #f3f4f6; --muted: #9ca3af; --faint: #6b7280; --line: #24272c; --soft: #1d2024;
-      --accent: #4f83f1; --green: #22c55e; --amber: #f59e0b; --red: #f87171; --blue: #38bdf8; --violet: #a78bfa; color-scheme: dark; }
+  :root.dark {
+    --bg: #0a0a0a; --surface: #171717; --sidebar: #0a0a0a; --line: #262626; --line-strong: #404040;
+    --text: #f5f5f5; --muted: #a3a3a3; --faint: #737373; --hover: #262626; --track: #262626;
+    --primary: #f5f5f5; --primary-ink: #171717; --primary-hover: #d4d4d4;
+    --green-bg: rgba(20,83,45,.25); --green-ink: #4ade80; --green-ring: rgba(34,197,94,.3);
+    --amber-bg: rgba(120,53,15,.25); --amber-ink: #fbbf24; --amber-ring: rgba(245,158,11,.3);
+    --red-bg: rgba(127,29,29,.25); --red-ink: #f87171; --red-ring: rgba(239,68,68,.3);
+    --shadow: none; --shadow-lg: 0 10px 30px -8px rgba(0,0,0,.6), 0 0 0 1px #262626;
+    color-scheme: dark;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
-  a { color: var(--accent); text-decoration: none; }
-  .wrap { max-width: 1240px; margin: 0 auto; padding: 24px 20px 80px; }
-  .grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 16px; margin-bottom: 16px; }
-  .grid > * { grid-column: span 12; min-width: 0; }
-  @media (min-width: 900px) {
-    .s3 { grid-column: span 3; } .s4 { grid-column: span 4; } .s5 { grid-column: span 5; } .s6 { grid-column: span 6; }
-    .s7 { grid-column: span 7; } .s8 { grid-column: span 8; }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 "Inter", ui-sans-serif, system-ui, sans-serif;
+    font-feature-settings: "cv11", "ss01"; -webkit-font-smoothing: antialiased; }
+  ::selection { background: var(--text); color: var(--surface); }
+  :focus-visible { outline: 2px solid var(--text); outline-offset: 2px; border-radius: 6px; }
+  * { scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+  a { color: inherit; text-decoration: none; }
+  svg.i { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+  .num { font-variant-numeric: tabular-nums; }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13px; }
+  .muted { color: var(--muted); }
+
+  /* ---------- shell ---------- */
+  .shell { display: flex; height: 100vh; overflow: hidden; }
+  .sidebar { width: 256px; flex: none; background: var(--sidebar); border-right: 1px solid var(--line); display: flex; flex-direction: column;
+    transition: margin-left .25s cubic-bezier(.16,1,.3,1); }
+  .shell.collapsed .sidebar { margin-left: -257px; }
+  .side-head { height: 56px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; border-bottom: 1px solid var(--line); flex: none; }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; letter-spacing: -.01em; }
+  .brand-mark { width: 22px; height: 22px; border-radius: 6px; background: var(--primary); color: var(--primary-ink); display: grid; place-items: center; }
+  .brand-mark svg { width: 13px; height: 13px; fill: currentColor; stroke: none; }
+  .nav { flex: 1; overflow-y: auto; padding: 12px; display: grid; gap: 2px; align-content: start; }
+  .nav a, .side-foot button { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-radius: 8px; font-size: 14px; font-weight: 500;
+    color: var(--muted); transition: background .15s, color .15s; width: 100%; border: 0; background: none; font-family: inherit; cursor: pointer; text-align: left; }
+  .nav a:hover, .side-foot button:hover { background: var(--hover); color: var(--text); }
+  .nav a.on { background: var(--hover); color: var(--text); }
+  .side-foot { border-top: 1px solid var(--line); padding: 12px; flex: none; }
+  .side-foot .who { padding: 8px 12px 2px; font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .icon-btn { display: inline-grid; place-items: center; padding: 6px; border-radius: 6px; border: 0; background: none; color: var(--muted); cursor: pointer; }
+  .icon-btn:hover { background: var(--hover); color: var(--text); }
+  .icon-btn svg.i { width: 18px; height: 18px; }
+  .dark .show-light, :root:not(.dark) .show-dark { display: none; }
+
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
+  .topbar { height: 56px; flex: none; display: flex; align-items: center; gap: 12px; padding: 0 16px; border-bottom: 1px solid var(--line); background: var(--sidebar); }
+  .topbar .brand { display: none; }
+  .content { flex: 1; overflow: auto; }
+  .page { max-width: 1024px; margin: 0 auto; padding: 24px 24px 64px; }
+  .scrim { display: none; }
+
+  @media (max-width: 767px) {
+    .sidebar { position: fixed; inset: 0 auto 0 0; z-index: 60; width: 288px; margin-left: -289px; }
+    .shell.mobile-open .sidebar { margin-left: 0; box-shadow: var(--shadow-lg); }
+    .shell.collapsed .sidebar { margin-left: -289px; }
+    .shell.mobile-open .scrim { display: block; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 50; animation: fade .3s; }
+    .topbar .brand { display: flex; }
+    .page { padding: 20px 16px 56px; }
+    .desktop-only { display: none !important; }
   }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; }
-  .card h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 14px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-  .card h2 .btn { text-transform: none; letter-spacing: 0; }
-  .card h2 small { text-transform: none; letter-spacing: 0; font-weight: 400; }
-  .muted { color: var(--muted); } .faint { color: var(--faint); }
+  @media (min-width: 768px) { .mobile-only { display: none !important; } }
 
-  /* header */
-  .head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 12px; margin-bottom: 20px; }
-  .head h1 { margin: 0; font-size: 26px; font-weight: 650; letter-spacing: -.02em; }
-  .state { font-size: 15px; margin-top: 4px; }
-  .badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; background: var(--soft); font-size: 12.5px; color: var(--muted); }
-  .badge::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
-  .badge.fresh::before, .badge.online::before { background: var(--green); }
-  .badge.stale::before { background: var(--amber); } .badge.old::before { background: var(--red); }
-  .head-right { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  /* ---------- page header ---------- */
+  .page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; }
+  .page-head h1 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -.015em; line-height: 1.3; text-wrap: balance; }
+  .page-head p { margin: 2px 0 0; font-size: 14px; color: var(--muted); }
+  .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 
-  /* buttons */
-  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--line); background: var(--card); color: var(--ink);
-    border-radius: 9px; padding: 9px 14px; font: inherit; font-weight: 550; cursor: pointer; white-space: nowrap; }
-  .btn:hover { background: var(--soft); }
-  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .btn.primary:hover { filter: brightness(1.08); }
-  .btn.small { padding: 5px 10px; font-size: 13px; }
-  .btn.htmx-request { opacity: .55; pointer-events: none; }
-  .btns { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; }
+  /* ---------- cards ---------- */
+  .grid { display: grid; gap: 16px; }
+  .g2 { grid-template-columns: 1fr; } .g4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  @media (min-width: 768px) { .g2 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .g4 { grid-template-columns: repeat(4, minmax(0, 1fr)); } .span2 { grid-column: span 2; } }
+  .stack { display: grid; gap: 16px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 20px; min-width: 0; box-shadow: var(--shadow); }
+  .card-title { margin: 0 0 16px; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .06em;
+    display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 22px; }
+  .card-title > * { text-transform: none; letter-spacing: 0; font-weight: 500; }
+  .card.flush { padding: 0; overflow: hidden; }
+  .card.flush .card-title { padding: 16px 20px; margin: 0; border-bottom: 1px solid var(--line); }
 
-  /* stat tiles */
-  .tiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 16px; }
-  @media (min-width: 900px) { .tiles { grid-template-columns: repeat(4, 1fr); } }
-  .tile { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
-  .tile .k { color: var(--muted); font-size: 12.5px; }
-  .tile .v { font-size: 26px; font-weight: 650; letter-spacing: -.02em; font-variant-numeric: tabular-nums; margin-top: 2px; }
-  .tile .v small { font-size: 14px; font-weight: 500; color: var(--muted); margin-left: 2px; }
-  .tile .d { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
-  .meter { height: 6px; border-radius: 3px; background: var(--soft); margin-top: 8px; position: relative; overflow: hidden; }
-  .meter i { position: absolute; inset: 0 auto 0 0; background: var(--green); border-radius: 3px; }
-  .meter.low i { background: var(--red); }
+  .stat { padding: 16px; }
+  .stat .label { font-size: 12px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 4px; }
+  .stat .value { font-size: 22px; font-weight: 600; letter-spacing: -.02em; line-height: 1.25; display: flex; align-items: baseline; gap: 3px; }
+  .stat .value .unit, .big .unit { font-size: 14px; font-weight: 500; color: var(--muted); }
+  .stat .hint { font-size: 12px; color: var(--muted); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-  /* charts */
-  .chart { position: relative; }
-  .chart svg { display: block; width: 100%; height: 150px; }
-  .chart path { fill: none; stroke-width: 2.2; vector-effect: non-scaling-stroke; stroke-linejoin: round; stroke-linecap: round; }
-  .chart line.grid { stroke: var(--line); stroke-width: 1; vector-effect: non-scaling-stroke; }
-  .s-battery { stroke: var(--green); } .s-inside { stroke: var(--amber); } .s-outside { stroke: var(--blue); } .s-speed { stroke: var(--violet); }
-  .yl { position: absolute; left: 0; font-size: 11px; color: var(--faint); background: var(--card); padding-right: 4px; }
-  .yl.top { top: -2px; } .yl.bot { bottom: -2px; }
-  .xl { display: flex; justify-content: space-between; font-size: 11px; color: var(--faint); margin-top: 6px; }
-  .legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); font-weight: 400; text-transform: none; letter-spacing: 0; }
-  .legend span::before { content: ""; display: inline-block; width: 10px; height: 3px; border-radius: 2px; margin-right: 5px; vertical-align: 3px; background: currentColor; }
-  .legend .s-battery { color: var(--green); } .legend .s-inside { color: var(--amber); } .legend .s-outside { color: var(--blue); } .legend .s-speed { color: var(--violet); }
-  .legend span { color: var(--muted); } .legend span.s-battery::before { background: var(--green); } .legend span.s-inside::before { background: var(--amber); }
-  .legend span.s-outside::before { background: var(--blue); } .legend span.s-speed::before { background: var(--violet); }
-  .seg { display: inline-flex; background: var(--soft); border-radius: 8px; padding: 2px; }
-  .seg a { padding: 4px 10px; border-radius: 6px; color: var(--muted); font-size: 12.5px; text-transform: none; letter-spacing: 0; font-weight: 500; }
-  .seg a.on { background: var(--card); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
-  .nochart { height: 150px; display: grid; place-items: center; color: var(--faint); font-size: 13px; text-transform: none; }
+  .rows { display: grid; gap: 12px; }
+  .row { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 14px; min-height: 22px; }
+  .row > span:first-child { color: var(--muted); }
+  .row > :last-child { font-weight: 500; text-align: right; min-width: 0; }
+  .big { font-size: 24px; font-weight: 600; letter-spacing: -.02em; display: inline-flex; align-items: baseline; gap: 2px; }
 
-  /* departures */
-  .leave { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-  .leave form { display: flex; gap: 6px; }
-  input[type=time], input[type=number], input[type=text] { font: inherit; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--line); background: var(--card); color: var(--ink); }
-  .plan { background: var(--soft); border-radius: 10px; padding: 12px 14px; margin: 14px 0 0; font-size: 13.5px; }
-  .plan b { font-weight: 600; }
-  .notice { border-left: 3px solid var(--accent); }
-  .list { margin-top: 12px; }
-  .item { display: flex; gap: 12px; align-items: flex-start; padding: 10px 0; border-top: 1px solid var(--line); font-size: 13.5px; }
-  .item .t { font-weight: 600; font-variant-numeric: tabular-nums; min-width: 4.8em; }
-  .item .body { flex: 1; min-width: 0; }
-  .pill { display: inline-block; font-size: 11.5px; padding: 1px 8px; border-radius: 999px; background: var(--soft); color: var(--muted); margin-left: 6px; }
-  .pill.done { color: var(--green); } .pill.failed, .pill.missed { color: var(--red); } .pill.pending, .pill.running { color: var(--accent); }
+  .bar { position: relative; height: 8px; border-radius: 999px; background: var(--track); margin: 8px 0 4px; }
+  .bar > i { position: absolute; inset: 0 auto 0 0; border-radius: 999px; background: var(--primary); transition: width .7s cubic-bezier(.16,1,.3,1); }
+  .bar.low > i { background: var(--red); }
+  .bar.charging > i { background: var(--green); }
+  .bar > b { position: absolute; top: -3px; bottom: -3px; width: 2px; border-radius: 1px; background: var(--line-strong); }
 
-  /* weather */
-  .wx-now { display: flex; align-items: baseline; gap: 12px; }
-  .wx-now .v { font-size: 40px; font-weight: 650; letter-spacing: -.03em; }
-  .hours { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-top: 14px; text-align: center; font-size: 12px; }
-  .hours div { background: var(--soft); border-radius: 9px; padding: 8px 2px; }
-  .hours b { display: block; font-size: 15px; margin: 2px 0; }
+  /* ---------- pills / status ---------- */
+  .pill { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 2px 8px; font-size: 12px; font-weight: 500; line-height: 18px;
+    background: var(--hover); color: var(--muted); box-shadow: inset 0 0 0 1px var(--line); white-space: nowrap; }
+  .pill.green { background: var(--green-bg); color: var(--green-ink); box-shadow: inset 0 0 0 1px var(--green-ring); }
+  .pill.amber { background: var(--amber-bg); color: var(--amber-ink); box-shadow: inset 0 0 0 1px var(--amber-ring); }
+  .pill.red { background: var(--red-bg); color: var(--red-ink); box-shadow: inset 0 0 0 1px var(--red-ring); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); flex: none; }
+  .dot.green { background: var(--green); } .dot.amber { background: var(--amber); } .dot.red { background: var(--red); }
+  .dot.pulse { animation: pulse 2s cubic-bezier(.4,0,.6,1) infinite; }
+  .status { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 500; }
 
-  /* location */
-  .map { width: 100%; height: 210px; border: 0; border-radius: 10px; background: var(--soft); display: block; }
-  @media (prefers-color-scheme: dark) { .map { filter: invert(.9) hue-rotate(180deg) saturate(.5); } }
+  /* ---------- buttons / inputs ---------- */
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 12px; border-radius: 8px; font: 500 14px/20px inherit;
+    font-family: inherit; border: 1px solid var(--line); background: var(--surface); color: var(--text); cursor: pointer; white-space: nowrap;
+    transition: background .15s, border-color .15s, color .15s, opacity .15s; }
+  .btn:hover { background: var(--hover); }
+  .btn.primary { background: var(--primary); border-color: var(--primary); color: var(--primary-ink); }
+  .btn.primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+  .btn.danger { color: var(--red-ink); }
+  .btn.lg { padding: 9px 16px; }
+  .btn.sm { padding: 3px 9px; font-size: 13px; }
+  .btn.block { width: 100%; }
+  .btn:disabled, .btn.htmx-request { opacity: .5; pointer-events: none; }
+  .btn .spin { display: none; }
+  .btn.htmx-request .spin { display: block; animation: spin .8s linear infinite; }
+  .btn.htmx-request .ico { display: none; }
+  .btn-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .link { font-size: 12px; font-weight: 500; color: var(--muted); display: inline-flex; align-items: center; gap: 4px; }
+  .link:hover { color: var(--text); }
 
-  /* controls */
-  .climate { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
-  .group { margin-top: 14px; } .group > div:first-child { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
-  label.check { display: inline-flex; gap: 6px; align-items: center; font-size: 13.5px; }
+  input[type=time], input[type=number], input[type=text] { font: inherit; font-size: 14px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--surface); color: var(--text); min-width: 0; }
+  input:focus-visible { outline: 2px solid var(--text); outline-offset: 0; }
+  input[type=checkbox] { accent-color: var(--primary); width: 16px; height: 16px; margin: 0; }
+  label.check { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; }
+  .field { display: grid; gap: 6px; font-size: 13px; font-weight: 500; }
+  .field input { width: 100%; }
 
-  /* schedules */
-  .sched { display: flex; align-items: center; gap: 14px; padding: 12px 0; border-top: 1px solid var(--line); }
-  .sched .t { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; min-width: 3.4em; }
-  .sched .body { flex: 1; min-width: 0; } .sched.off .t, .sched.off .body { opacity: .45; }
-  .switch { width: 40px; height: 24px; border-radius: 12px; border: 0; background: var(--line); position: relative; cursor: pointer; flex: none; }
-  .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform .15s; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
-  .switch.on { background: var(--green); } .switch.on::after { transform: translateX(16px); }
-  details.add { margin-top: 10px; } details.add > summary { cursor: pointer; color: var(--accent); font-weight: 550; padding: 8px 0; list-style: none; }
-  .form { display: grid; gap: 12px; padding-top: 6px; }
-  .form .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-  .form .row > label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
-  .days { display: flex; gap: 4px; }
+  .seg { display: inline-flex; background: var(--hover); border-radius: 8px; padding: 2px; gap: 2px; }
+  .seg a, .seg button { padding: 3px 10px; border-radius: 6px; font-size: 13px; font-weight: 500; color: var(--muted); border: 0; background: none; cursor: pointer; font-family: inherit; }
+  .seg .on { background: var(--surface); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.08), inset 0 0 0 1px var(--line); }
+
+  .switch { width: 36px; height: 20px; border-radius: 999px; border: 0; background: var(--line-strong); position: relative; cursor: pointer; flex: none; transition: background .2s; }
+  .switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff;
+    transition: transform .2s cubic-bezier(.16,1,.3,1); box-shadow: 0 1px 2px rgba(0,0,0,.2); }
+  .switch.on { background: var(--primary); } .switch.on::after { transform: translateX(16px); }
+  .dark .switch.on::after { background: #171717; }
+
+  /* ---------- tables / lists ---------- */
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-size: 12px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; padding: 10px 20px;
+    background: var(--bg); border-bottom: 1px solid var(--line); white-space: nowrap; }
+  td { padding: 12px 20px; font-size: 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr:last-child td { border-bottom: 0; }
+  tbody tr { transition: background .15s; } tbody tr:hover { background: var(--bg); }
+  td.sub { color: var(--muted); }
+  .table-wrap { overflow-x: auto; }
+  .empty-note { padding: 40px 20px; text-align: center; color: var(--muted); font-size: 14px; }
+
+  /* ---------- charts ---------- */
+  .chart { position: relative; height: 160px; margin-left: 36px; }
+  .chart svg { display: block; width: 100%; height: 100%; overflow: visible; }
+  .chart path { fill: none; stroke-width: 2; vector-effect: non-scaling-stroke; stroke-linejoin: round; stroke-linecap: round; }
+  .chart path.area { stroke: none; opacity: .08; }
+  .chart line.grid { stroke: var(--line); stroke-width: 1; vector-effect: non-scaling-stroke; stroke-dasharray: 3 4; }
+  .chart .draw path:not(.area) { stroke-dasharray: 1; stroke-dashoffset: 1; animation: draw 1.2s cubic-bezier(.16,1,.3,1) .1s forwards; }
+  .chart .draw path.area { opacity: 0; animation: area .8s ease-out .6s forwards; }
+  .s-battery { stroke: var(--text); fill: var(--text); } .s-inside { stroke: var(--amber); fill: var(--amber); }
+  .s-outside { stroke: var(--sky); fill: var(--sky); } .s-speed { stroke: var(--violet); fill: var(--violet); }
+  .yl { position: absolute; left: -36px; font-size: 11px; color: var(--muted); width: 30px; text-align: right; }
+  .yl.top { top: 0; } .yl.bot { bottom: 0; }
+  .xl { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin: 8px 0 0 36px; }
+  .mark { position: absolute; width: 9px; height: 9px; margin: -4.5px 0 0 -4.5px; border-radius: 50%; border: 2px solid var(--surface); }
+  .mark.s-battery { background: var(--text); } .mark.s-inside { background: var(--amber); } .mark.s-outside { background: var(--sky); } .mark.s-speed { background: var(--violet); }
+  .mark::after { content: ""; position: absolute; inset: -6px; border-radius: 50%; background: inherit; opacity: .25; animation: ping 2s cubic-bezier(0,0,.2,1) infinite; }
+  .legend { display: flex; gap: 12px; flex-wrap: wrap; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); text-transform: none; letter-spacing: 0; font-weight: 500; }
+  .legend i { width: 10px; height: 3px; border-radius: 2px; }
+  .legend i.s-battery { background: var(--text); } .legend i.s-inside { background: var(--amber); } .legend i.s-outside { background: var(--sky); } .legend i.s-speed { background: var(--violet); }
+  .nochart { height: 160px; display: grid; place-items: center; color: var(--muted); font-size: 13px; border: 1px dashed var(--line); border-radius: 8px; text-align: center; padding: 16px; }
+
+  /* ---------- misc ---------- */
+  .map { width: 100%; height: 200px; border: 1px solid var(--line); border-radius: 8px; background: var(--hover); display: block; margin-bottom: 16px; }
+  .dark .map { filter: invert(.9) hue-rotate(180deg) saturate(.4) brightness(.95); }
+  .notice { display: flex; gap: 12px; align-items: flex-start; border-radius: 12px; padding: 16px; margin-bottom: 24px; font-size: 14px;
+    background: var(--amber-bg); color: var(--amber-ink); box-shadow: inset 0 0 0 1px var(--amber-ring); }
+  .notice svg.i { width: 20px; height: 20px; margin-top: 1px; }
+  .callout { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; font-size: 14px; margin-top: 16px; }
+  .callout b { font-weight: 600; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .chips form { display: flex; gap: 6px; }
+  .wx { display: flex; align-items: center; gap: 16px; }
+  .wx .big { font-size: 36px; }
+  .hours { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; margin-top: 16px; text-align: center; }
+  .hours div { border: 1px solid var(--line); border-radius: 8px; padding: 8px 2px; font-size: 12px; color: var(--muted); }
+  .hours b { display: block; font-size: 15px; font-weight: 600; color: var(--text); margin: 2px 0; }
+  .steps { list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 12px; }
+  .steps li { display: flex; gap: 12px; align-items: flex-start; font-size: 14px; }
+  .steps .n { width: 22px; height: 22px; flex: none; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 600;
+    background: var(--hover); color: var(--muted); box-shadow: inset 0 0 0 1px var(--line); }
+  .steps li.done .n { background: var(--primary); color: var(--primary-ink); box-shadow: none; }
+  .steps li.done .txt { color: var(--muted); }
+  code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12.5px; background: var(--hover); padding: 2px 6px; border-radius: 4px; overflow-wrap: anywhere; }
+  .days { display: flex; gap: 6px; flex-wrap: wrap; }
   .days label { position: relative; }
-  .days input { position: absolute; opacity: 0; inset: 0; cursor: pointer; }
-  .days span { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--soft); color: var(--muted); font-size: 12.5px; font-weight: 600; }
-  .days input:checked + span { background: var(--accent); color: #fff; }
+  .days input { position: absolute; opacity: 0; inset: 0; cursor: pointer; margin: 0; width: 100%; height: 100%; }
+  .days span { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--line); color: var(--muted); font-size: 13px; font-weight: 500; transition: all .15s; }
+  .days input:checked + span { background: var(--primary); border-color: var(--primary); color: var(--primary-ink); }
+  .days input:focus-visible + span { outline: 2px solid var(--text); outline-offset: 2px; }
+  .sched { display: flex; align-items: center; gap: 16px; padding: 14px 20px; border-bottom: 1px solid var(--line); }
+  .sched:last-child { border-bottom: 0; }
+  .sched .t { font-size: 18px; font-weight: 600; letter-spacing: -.01em; min-width: 3.2em; }
+  .sched .body { flex: 1; min-width: 0; }
+  .sched .body div:last-child { font-size: 13px; color: var(--muted); }
+  .sched.off .t, .sched.off .body { opacity: .45; }
+  .stepper { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .stepper button { border: 0; background: none; color: var(--text); width: 36px; height: 36px; cursor: pointer; font-size: 18px; font-family: inherit; }
+  .stepper button:hover { background: var(--hover); }
+  .stepper input { border: 0; border-radius: 0; width: 64px; text-align: center; font-size: 16px; font-weight: 600; -moz-appearance: textfield; }
+  .stepper input::-webkit-inner-spin-button { -webkit-appearance: none; }
+  .divider { height: 1px; background: var(--line); margin: 16px 0; }
+  .sub-title { font-size: 13px; font-weight: 500; margin-bottom: 8px; }
+  .usage-bar { height: 8px; border-radius: 999px; background: var(--track); overflow: hidden; margin: 16px 0 6px; }
+  .usage-bar i { display: block; height: 100%; background: var(--primary); border-radius: 999px; }
 
-  /* setup / empty state */
-  .empty { border: 1px dashed var(--line); background: var(--card); border-radius: 14px; padding: 22px; margin-bottom: 16px; }
-  .empty h3 { margin: 0 0 4px; font-size: 18px; }
-  .steps { list-style: none; padding: 0; margin: 14px 0 0; display: grid; gap: 10px; }
-  .steps li { display: flex; gap: 12px; align-items: flex-start; }
-  .steps .n { width: 24px; height: 24px; flex: none; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; background: var(--soft); color: var(--muted); }
-  .steps li.done .n { background: var(--green); color: #fff; }
-  .steps li.done .txt { color: var(--muted); text-decoration: line-through; }
-  code { background: var(--soft); padding: 2px 6px; border-radius: 5px; font-size: 12.5px; overflow-wrap: anywhere; }
+  /* ---------- toasts ---------- */
+  #toast { position: fixed; right: 24px; bottom: 24px; z-index: 100; width: 356px; max-width: calc(100% - 32px); }
+  @media (max-width: 767px) { #toast { right: 16px; bottom: 16px; } }
+  .msg { display: flex; align-items: flex-start; gap: 10px; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 10px;
+    padding: 14px 16px; font-size: 14px; font-weight: 500; box-shadow: var(--shadow-lg); animation: toast 5s cubic-bezier(.16,1,.3,1) forwards; }
+  .msg svg { width: 18px; height: 18px; flex: none; margin-top: 1px; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .msg.ok svg { stroke: var(--green); } .msg.err svg { stroke: var(--red); }
+  .msg.err { animation-duration: 9s; }
 
-  .usage { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-  .usage b { display: block; font-size: 20px; font-variant-numeric: tabular-nums; }
-  .usage span { font-size: 12px; color: var(--muted); }
-
-  #toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 10; max-width: calc(100% - 32px); }
-  .msg { background: var(--ink); color: var(--bg); padding: 11px 18px; border-radius: 10px; font-size: 13.5px; box-shadow: 0 10px 30px rgba(0,0,0,.25); animation: toast 5s forwards; }
-  .msg.err { background: var(--red); color: #fff; animation-duration: 9s; }
-  @keyframes toast { 0% { opacity: 0; transform: translateY(8px); } 6%, 85% { opacity: 1; transform: none; } 100% { opacity: 0; visibility: hidden; } }
+  /* ---------- motion ---------- */
+  [data-nf] { display: inline-flex; }
+  [data-nf] > span { height: 1.2em; line-height: 1.2em; }
+  .dg { display: inline-block; height: 1.2em; line-height: 1.2em; overflow: hidden; vertical-align: bottom;
+    -webkit-mask-image: linear-gradient(transparent, #000 15%, #000 85%, transparent); mask-image: linear-gradient(transparent, #000 15%, #000 85%, transparent); }
+  .strip { display: flex; flex-direction: column; transition: transform .9s cubic-bezier(.16,1,.3,1); }
+  .strip span { height: 1.2em; }
+  @keyframes pulse { 50% { opacity: .45; } }
+  @keyframes ping { 75%, 100% { transform: scale(1.8); opacity: 0; } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes fade { from { opacity: 0; } }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+  @keyframes area { to { opacity: .08; } }
+  @keyframes toast { 0% { opacity: 0; transform: translateY(16px) scale(.97); } 5%, 88% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translateY(6px); visibility: hidden; } }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+    .chart .draw path:not(.area) { stroke-dashoffset: 0; }
+  }
 </style>
 </head>
 <body>
-<div class="wrap">
-
-  <header class="head" id="top" hx-get="/?range={{.Range}}" hx-select="#top" hx-swap="outerHTML" hx-trigger="every 60s, commandDone from:body delay:5s">
-    <div>
-      <h1>{{if .Status.Name}}{{.Status.Name}}{{else}}Your Tesla{{end}}</h1>
-      <div class="state">
-        {{with .Latest}}{{if .Driving}}Driving{{if .SpeedKmh}} at {{num .SpeedKmh 0}} km/h{{end}}{{else if .Charging}}Charging{{if .ChargerPowerKW}} at {{num .ChargerPowerKW 0}} kW{{end}}{{else}}Parked{{end}}{{if yes .ClimateOn}} · climate on{{end}}{{else}}{{if .Connected}}Waiting for the first reading{{else}}Not connected{{end}}{{end}}
-      </div>
+<div class="shell" id="shell">
+  <aside class="sidebar" aria-label="Navigation">
+    <div class="side-head">
+      <a class="brand" href="/">{{template "brand-mark"}} Tesla Hub</a>
+      <button class="icon-btn desktop-only" onclick="sidebar.collapse()" aria-label="Collapse sidebar" title="Collapse sidebar">
+        <svg class="i" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button>
+      <button class="icon-btn mobile-only" onclick="sidebar.closeMobile()" aria-label="Close navigation">
+        <svg class="i" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
     </div>
-    <div class="head-right">
-      {{if .Status.State}}<span class="badge {{.Status.State}}">Car {{.Status.State}}</span>{{end}}
-      {{with .Latest}}<span class="badge {{fresh .Time}}" title="When the car last reported. The hub polls every few minutes while the car is awake, and lets it sleep otherwise.">Data from {{clock .Time}} · {{ago .Time}}</span>{{end}}
-      <button class="btn small" hx-post="/refresh" hx-target="#toast">Refresh</button>
-      <a class="btn small" href="http://localhost:3095" target="_blank">Full charts</a>
+    <nav class="nav">
+      <a href="/" class="{{if eq .Page "dashboard"}}on{{end}}"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Dashboard</a>
+      <a href="/controls" class="{{if eq .Page "controls"}}on{{end}}"><svg class="i" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>Controls</a>
+      <a href="/schedules" class="{{if eq .Page "schedules"}}on{{end}}"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Schedules</a>
+      <a href="/settings" class="{{if eq .Page "settings"}}on{{end}}"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Settings</a>
+      <a href="http://localhost:3095" target="_blank" rel="noopener"><svg class="i" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/></svg>Grafana</a>
+    </nav>
+    <div class="side-foot">
+      <button onclick="theme.toggle()">
+        <svg class="i show-dark" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+        <svg class="i show-light" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <span class="show-dark">Light mode</span><span class="show-light">Dark mode</span>
+      </button>
+      <div class="who">{{if .Status.Name}}{{.Status.Name}}{{else if .Connected}}Tesla account connected{{else}}Not connected{{end}}</div>
     </div>
-    {{if .Status.LastErr}}<div class="muted" style="width:100%;color:var(--red)">Last check failed: {{.Status.LastErr}}</div>{{end}}
-  </header>
+  </aside>
+  <div class="scrim" onclick="sidebar.closeMobile()"></div>
 
-  {{if not .Latest}}
-  <section class="empty">
-    <h3>No data from the car yet</h3>
-    <div class="muted">Stats, charts and weather show up once the car reports in. To get there:</div>
-    <ol class="steps">
-      <li class="{{if .Connected}}done{{end}}"><span class="n">1</span><div class="txt">Connect your Tesla account {{if not .Connected}}<a class="btn small primary" href="/auth/login" style="margin-left:6px">Connect</a>{{end}}</div></li>
-      <li><span class="n">2</span><div class="txt">Pair the key: open <code>https://tesla.com/_ak/{{.Domain}}</code> on your phone and tap your key card in the car when asked</div></li>
-      <li><span class="n">3</span><div class="txt">Wake the car by opening the Tesla app, then press <b>Refresh</b> above</div></li>
-    </ol>
-  </section>
-  {{end}}
-
-  {{if .Latest}}
-  <section id="stats" hx-get="/?range={{.Range}}" hx-select="#stats" hx-swap="outerHTML" hx-trigger="every 60s, commandDone from:body delay:5s">
-    {{with .Latest}}
-    <div class="tiles">
-      <div class="tile"><div class="k">Battery</div><div class="v">{{int .BatteryLevel}}<small>%</small></div>
-        <div class="meter {{if lt (pct .BatteryLevel) 20}}low{{end}}"><i style="width:{{pct .BatteryLevel}}%"></i></div>
-        <div class="d">Limit {{int .ChargeLimit}}%</div></div>
-      <div class="tile"><div class="k">Range</div><div class="v">{{num .RangeKm 0}}<small>km</small></div><div class="d">estimated</div></div>
-      <div class="tile"><div class="k">Cabin</div><div class="v">{{num .InsideTempC 0}}<small>°C</small></div><div class="d">{{if yes .ClimateOn}}Climate on, set {{num .DriverTempSetting 0}}°{{else}}Climate off{{end}}</div></div>
-      <div class="tile"><div class="k">Outside</div><div class="v">{{if $.Weather}}{{printf "%.0f" $.Weather.TempC}}{{else}}{{num .OutsideTempC 0}}{{end}}<small>°C</small></div><div class="d">{{if $.Weather}}{{$.Weather.Summary}}{{else}}car sensor{{end}}</div></div>
-      <div class="tile"><div class="k">Charging</div><div class="v" style="font-size:20px;padding:4px 0 2px">{{if .ChargingState}}{{.ChargingState}}{{else}}—{{end}}</div><div class="d">{{if .Charging}}{{num .ChargerPowerKW 0}} kW{{else}}not plugged in or idle{{end}}</div></div>
-      <div class="tile"><div class="k">Security</div><div class="v" style="font-size:20px;padding:4px 0 2px">{{if yes .Locked}}Locked{{else}}Unlocked{{end}}</div><div class="d">Sentry {{if yes .Sentry}}on{{else}}off{{end}}</div></div>
-      <div class="tile"><div class="k">Driven today</div><div class="v">{{num $.TodayKm 1}}<small>km</small></div><div class="d">from odometer readings</div></div>
-      <div class="tile"><div class="k">Odometer</div><div class="v">{{num .OdometerKm 0}}<small>km</small></div><div class="d">{{if .CarVersion}}software {{.CarVersion}}{{end}}</div></div>
-    </div>
-    {{end}}
-  </section>
-  {{end}}
-
-  <div class="grid">
-    <section class="card s7">{{template "departures" .}}</section>
-    <section class="card s5">
-      <h2>Weather {{with .Weather}}<small class="faint">at the car · Open-Meteo</small>{{end}}</h2>
-      {{with .Weather}}
-      <div class="wx-now"><span class="v">{{printf "%.0f" .TempC}}°</span><span><b>{{.Summary}}</b><br><span class="muted">Feels like {{printf "%.0f" .FeelsLikeC}}° · wind {{printf "%.0f" .WindKmh}} km/h</span></span></div>
-      <div class="hours">
-        {{range $i, $h := .Hours}}{{if and (lt $i 12) (eq (mod $i 2) 0)}}<div><span class="muted">{{hour $h.Time}}</span><b>{{printf "%.0f" $h.TempC}}°</b><span class="muted">{{if ge $h.PrecipProb 20}}{{$h.PrecipProb}}% 💧{{else}}{{sky $h.Code}}{{end}}</span></div>{{end}}{{end}}
+  <div class="main">
+    <header class="topbar">
+      <button class="icon-btn" onclick="sidebar.toggle()" aria-label="Open navigation">
+        <svg class="i" viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
+      <a class="brand" href="/">{{template "brand-mark"}} Tesla Hub</a>
+    </header>
+    <main class="content">
+      <div class="page">
+        {{if eq .Page "controls"}}{{template "controls" .}}
+        {{else if eq .Page "schedules"}}{{template "schedules" .}}
+        {{else if eq .Page "settings"}}{{template "settings" .}}
+        {{else}}{{template "dashboard" .}}{{end}}
       </div>
-      {{else}}<div class="nochart">Shows up once the car reports its location.</div>{{end}}
-    </section>
-  </div>
-
-  {{if .Latest}}
-  <section id="live" hx-get="/?range={{.Range}}" hx-select="#live" hx-swap="outerHTML" hx-trigger="every 60s, commandDone from:body delay:5s">
-    <div class="grid">
-      <div class="card s6">
-        <h2>Battery <span class="seg"><a href="/?range=24h" class="{{if eq .Range "24h"}}on{{end}}">24 h</a><a href="/?range=7d" class="{{if eq .Range "7d"}}on{{end}}">7 days</a></span></h2>
-        {{template "chart" .Battery}}
-      </div>
-      <div class="card s6">
-        <h2>Temperature <span class="legend">{{range .Temps.Legend}}<span class="{{.Class}}">{{.Name}}</span>{{end}}</span></h2>
-        {{template "chart" .Temps}}
-      </div>
-    </div>
-
-    <div class="grid">
-      <div class="card s8">
-        <h2>Speed <small class="faint">only recorded while driving (every {{.DrivingEvery}})</small></h2>
-        {{template "chart" .Speed}}
-      </div>
-      <div class="card s4">
-        <h2>Location {{with .Latest}}{{if .Latitude}}<a class="btn small" target="_blank" href="https://maps.apple.com/?ll={{num .Latitude 6}},{{num .Longitude 6}}&q=My%20car">Open in Maps</a>{{end}}{{end}}</h2>
-        {{with .Latest}}{{if .Latitude}}
-        <iframe class="map" loading="lazy" title="Car location"
-          src="https://www.openstreetmap.org/export/embed.html?bbox={{lon .Longitude -0.008}}%2C{{lat .Latitude -0.004}}%2C{{lon .Longitude 0.008}}%2C{{lat .Latitude 0.004}}&layer=mapnik&marker={{num .Latitude 6}}%2C{{num .Longitude 6}}"></iframe>
-        <div class="muted" style="margin-top:8px;font-size:12.5px">{{num .Latitude 5}}, {{num .Longitude 5}} · as of {{clock .Time}}</div>
-        {{else}}<div class="nochart">No location. Approve "Vehicle Location" when connecting.</div>{{end}}{{end}}
-      </div>
-    </div>
-  </section>
-  {{end}}
-
-  <div class="grid">
-    <section class="card s5">
-      <h2>Controls <small class="faint">wakes the car if needed (up to a minute)</small></h2>
-      <form class="climate" hx-post="/climate/on" hx-target="#toast" hx-disabled-elt="find button">
-        <input type="number" name="temp_c" value="21" min="15" max="28" step="0.5" style="width:5.5em" aria-label="Temperature °C"> °C
-        <label class="check"><input type="checkbox" name="seat_heat"> Seat heat</label>
-        <label class="check"><input type="checkbox" name="steering_heat"> Wheel heat</label>
-        <button class="btn primary">Climate on</button>
-        <button type="button" class="btn" hx-post="/climate/off" hx-target="#toast">Off</button>
-      </form>
-      <div class="group"><div>Doors & alarm</div>
-        <div class="btns">
-          <button class="btn" hx-post="/cmd/lock" hx-target="#toast">Lock</button>
-          <button class="btn" hx-post="/cmd/unlock" hx-target="#toast" hx-confirm="Unlock the car?">Unlock</button>
-          <button class="btn" hx-post="/cmd/sentry_on" hx-target="#toast">Sentry on</button>
-          <button class="btn" hx-post="/cmd/sentry_off" hx-target="#toast">Sentry off</button>
-          <button class="btn" hx-post="/cmd/flash" hx-target="#toast">Flash lights</button>
-          <button class="btn" hx-post="/cmd/honk" hx-target="#toast">Honk</button>
-        </div></div>
-      <div class="group"><div>Charging</div>
-        <div class="btns">
-          <button class="btn" hx-post="/cmd/charge_start" hx-target="#toast">Start</button>
-          <button class="btn" hx-post="/cmd/charge_stop" hx-target="#toast">Stop</button>
-          <button class="btn" hx-post="/cmd/port_open" hx-target="#toast">Open port</button>
-          <button class="btn" hx-post="/cmd/port_close" hx-target="#toast">Close port</button>
-        </div></div>
-    </section>
-    <section class="card s7">{{template "rules" .}}</section>
-  </div>
-
-  <div class="grid">
-    <section class="card s8">
-      <h2>API usage this month <small class="faint">Tesla bills per request · $10/month is free</small></h2>
-      <div class="usage">
-        <div><b>{{index .Usage "data"}}</b><span>data requests</span></div>
-        <div><b>{{index .Usage "command"}}</b><span>commands</span></div>
-        <div><b>{{index .Usage "wake"}}</b><span>wake-ups</span></div>
-        <div><b>${{printf "%.2f" .UsageCost}}</b><span>estimated (polling pauses at {{.Budget}} requests)</span></div>
-      </div>
-    </section>
-    <section class="card s4">
-      <h2>Account</h2>
-      {{if .Connected}}<div class="muted" style="margin-bottom:10px">Connected{{if .Status.VIN}} · VIN {{.Status.VIN}}{{end}}</div>
-      <form method="post" action="/auth/logout"><button class="btn small">Disconnect</button></form>
-      {{else}}<a class="btn primary" href="/auth/login">Connect Tesla account</a>{{end}}
-    </section>
+    </main>
   </div>
 </div>
 
 <div id="toast" aria-live="polite">
-  {{if .Flash}}<div class="msg">{{.Flash}}</div>{{end}}
-  {{if .Error}}<div class="msg err">{{.Error}}</div>{{end}}
+  {{if .Flash}}<div class="msg ok" role="status"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg><span>{{.Flash}}</span></div>{{end}}
+  {{if .Error}}<div class="msg err" role="status"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg><span>{{.Error}}</span></div>{{end}}
 </div>
+
+<script>
+  var store = {
+    get: function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    set: function (k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  };
+  var theme = {
+    toggle: function () {
+      var dark = document.documentElement.classList.toggle("dark");
+      store.set("theme", dark ? "dark" : "light");
+    }
+  };
+  var sidebar = {
+    el: document.getElementById("shell"),
+    mobile: function () { return matchMedia("(max-width: 767px)").matches; },
+    toggle: function () {
+      if (this.mobile()) { this.el.classList.add("mobile-open"); return; }
+      var c = this.el.classList.toggle("collapsed");
+      store.set("sidebar", c ? "collapsed" : "open");
+    },
+    collapse: function () { this.el.classList.add("collapsed"); store.set("sidebar", "collapsed"); },
+    closeMobile: function () { this.el.classList.remove("mobile-open"); }
+  };
+  if (store.get("sidebar") === "collapsed" && !sidebar.mobile()) sidebar.el.classList.add("collapsed");
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") sidebar.closeMobile(); });
+  // Temperature steppers on the controls page.
+  function step(id, d) {
+    var i = document.getElementById(id), v = Math.min(+i.max, Math.max(+i.min, (+i.value || 21) + d));
+    i.value = v.toFixed(1).replace(/\.0$/, "");
+  }
+</script>
+<script>
+  // Rolling numbers: each digit is a 0-9 strip that slides to its value. The
+  // server already rendered the final number, so nothing breaks without this.
+  (function () {
+    var reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    var shown = {}; // data-key -> text currently on screen, so refreshes roll from the old value
+    function strip(d) {
+      var s = '<span class="dg" aria-hidden="true"><span class="strip" style="transform:translateY(-' + d * 10 + '%)">';
+      for (var i = 0; i < 10; i++) s += "<span>" + i + "</span>";
+      return s + "</span></span>";
+    }
+    function roll(el, from, to) {
+      // Align digits from the right so 9 -> 10 rolls the ones column.
+      var f = from.replace(/\D/g, ""), fi = f.length - 1, html = "";
+      var starts = [];
+      for (var i = to.length - 1; i >= 0; i--) {
+        if (/\d/.test(to[i])) { starts.unshift(fi >= 0 ? +f[fi--] : 0); } else starts.unshift(null);
+      }
+      for (var j = 0; j < to.length; j++) html += starts[j] === null ? "<span>" + to[j] + "</span>" : strip(starts[j]);
+      el.setAttribute("aria-label", to);
+      el.innerHTML = html;
+      var strips = el.querySelectorAll(".strip"), digits = to.replace(/\D/g, "");
+      el.offsetWidth; // commit the start position before transitioning
+      requestAnimationFrame(function () {
+        strips.forEach(function (s, k) { s.style.transform = "translateY(-" + digits[k] * 10 + "%)"; });
+      });
+    }
+    function hydrate(root) {
+      root.querySelectorAll("[data-nf]").forEach(function (el) {
+        if (el.dataset.nfDone) return;
+        el.dataset.nfDone = "1";
+        var to = el.textContent.trim(), key = el.dataset.key;
+        var seen = key && shown[key] !== undefined, from = seen ? shown[key] : to.replace(/\d/g, "0");
+        if (key) shown[key] = to;
+        if (reduce || from === to) return;
+        if (seen) { roll(el, from, to); return; }
+        el.style.visibility = "hidden";
+        var done = false, go = function () { if (!done) { done = true; el.style.visibility = ""; roll(el, from, to); } };
+        if ("IntersectionObserver" in window)
+          new IntersectionObserver(function (es, o) { if (es[0].isIntersecting) { o.disconnect(); go(); } }).observe(el);
+        setTimeout(go, 1200);
+      });
+    }
+    hydrate(document);
+    document.body.addEventListener("htmx:afterSettle", function (e) { hydrate(e.target); });
+  })();
+</script>
 </body>
 </html>
 
+{{define "brand-mark"}}<span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg></span>{{end}}
+
 {{define "chart"}}
 {{if .HasData}}
-<div class="chart">{{.SVG}}<span class="yl top">{{.Top}}</span><span class="yl bot">{{.Bottom}}</span></div>
+<div class="chart"><div class="draw" style="height:100%">{{.SVG}}</div>
+  {{range .Last}}<span class="mark {{.Class}}" style="left:{{printf "%.2f" .X}}%;top:{{printf "%.2f" .Y}}%" title="Latest: {{.Label}}"></span>{{end}}
+  <span class="yl top">{{.Top}}</span><span class="yl bot">{{.Bottom}}</span></div>
 <div class="xl">{{range .XLabels}}<span>{{.}}</span>{{end}}</div>
 {{else}}<div class="nochart">No readings in this period yet</div>{{end}}
-{{end}}
-
-{{define "departures"}}
-<div id="departures">
-  <h2>Leaving soon? <small class="faint">picks heat or cool from the weather</small></h2>
-  <div class="leave">
-    <button class="btn primary" hx-post="/depart" hx-vals='{"minutes":"0"}' hx-target="#departures" hx-swap="outerHTML">Now</button>
-    <button class="btn" hx-post="/depart" hx-vals='{"minutes":"10"}' hx-target="#departures" hx-swap="outerHTML">In 10 min</button>
-    <button class="btn" hx-post="/depart" hx-vals='{"minutes":"20"}' hx-target="#departures" hx-swap="outerHTML">In 20 min</button>
-    <button class="btn" hx-post="/depart" hx-vals='{"minutes":"30"}' hx-target="#departures" hx-swap="outerHTML">In 30 min</button>
-    <form hx-post="/depart" hx-target="#departures" hx-swap="outerHTML"><input type="time" name="at" required aria-label="Departure time"><button class="btn">Set</button></form>
-  </div>
-  {{if .Notice}}<div class="plan notice">{{.Notice}}</div>
-  {{else if .Preview}}<div class="plan"><b>If you left in 15 min:</b> {{.Preview.Reason}}</div>{{end}}
-  {{if .Departures}}
-  <div class="list">
-    {{range .Departures}}
-    <div class="item">
-      <div class="t">{{clock .DepartAt}}</div>
-      <div class="body">{{.Reason}}<span class="pill {{.Status}}">{{.Status}}</span>{{if .Message}}<div class="faint">{{.Message}}</div>{{end}}</div>
-      {{if eq .Status "pending"}}<button class="btn small" hx-delete="/departures/{{.ID}}" hx-target="#departures" hx-swap="outerHTML">Cancel</button>{{end}}
-    </div>
-    {{end}}
-  </div>
-  {{end}}
-</div>
-{{end}}
-
-{{define "rules"}}
-<div id="rules">
-  <h2>Schedules <small class="faint">repeat preheats</small></h2>
-  {{range .Rules}}
-  <div class="sched {{if not .Enabled}}off{{end}}">
-    <div class="t">{{.AtTime}}</div>
-    <div class="body"><div><b>{{.Name}}</b></div>
-      <div class="muted">{{days .Days}} · {{.TempC}}°{{if .RadiusM}} · only within {{km .RadiusM}} of the saved spot{{end}}{{if .MaxOutsideTempC}} · only below {{f .MaxOutsideTempC}}°{{end}}{{if .SeatHeat}} · seat{{end}}{{if .SteeringHeat}} · wheel{{end}}</div></div>
-    <button class="switch {{if .Enabled}}on{{end}}" aria-label="On/off" hx-post="/rules/{{.ID}}/toggle" hx-vals='{"enabled":"{{if .Enabled}}false{{else}}true{{end}}"}' hx-target="#rules" hx-swap="outerHTML"></button>
-    <button class="btn small" hx-delete="/rules/{{.ID}}" hx-confirm="Delete {{.Name}}?" hx-target="#rules" hx-swap="outerHTML">Delete</button>
-  </div>
-  {{else}}<div class="muted">No schedules yet. Add one to preheat on a routine, e.g. weekday mornings.</div>{{end}}
-
-  <details class="add">
-    <summary>+ Add a schedule</summary>
-    <form class="form" hx-post="/rules" hx-target="#rules" hx-swap="outerHTML">
-      <div class="row">
-        <label>Name<input type="text" name="name" placeholder="Work mornings"></label>
-        <label>Start at<input type="time" name="at_time" value="07:30" required></label>
-        <label>Temp °C<input type="number" name="temp_c" value="21" min="15" max="28" step="0.5" style="width:5.5em"></label>
-      </div>
-      <div class="days">
-        <label><input type="checkbox" name="days" value="1" checked><span>M</span></label>
-        <label><input type="checkbox" name="days" value="2" checked><span>T</span></label>
-        <label><input type="checkbox" name="days" value="3" checked><span>W</span></label>
-        <label><input type="checkbox" name="days" value="4" checked><span>T</span></label>
-        <label><input type="checkbox" name="days" value="5" checked><span>F</span></label>
-        <label><input type="checkbox" name="days" value="6"><span>S</span></label>
-        <label><input type="checkbox" name="days" value="0"><span>S</span></label>
-      </div>
-      <div class="row">
-        <label class="check" style="flex-direction:row"><input type="checkbox" name="use_geofence" {{with .Latest}}{{if .Latitude}}checked{{end}}{{end}}> Only if the car is within</label>
-        <input type="number" name="radius_m" value="200" min="20" style="width:6em" aria-label="Radius in metres"> m of
-        <input type="text" name="latitude" value="{{with .Latest}}{{num .Latitude 5}}{{end}}" placeholder="lat" style="width:7.5em" aria-label="Latitude">
-        <input type="text" name="longitude" value="{{with .Latest}}{{num .Longitude 5}}{{end}}" placeholder="lon" style="width:7.5em" aria-label="Longitude">
-      </div>
-      <div class="row">
-        <label class="check" style="flex-direction:row"><input type="checkbox" name="use_max_temp"> Only if it's colder than</label>
-        <input type="number" name="max_outside_temp_c" value="10" step="0.5" style="width:5.5em" aria-label="Max outside °C"> °C
-      </div>
-      <div class="row">
-        <label class="check" style="flex-direction:row"><input type="checkbox" name="seat_heat"> Seat heat</label>
-        <label class="check" style="flex-direction:row"><input type="checkbox" name="steering_heat"> Wheel heat</label>
-        <button class="btn primary">Save schedule</button>
-      </div>
-      <div class="faint" style="font-size:12px">The location is prefilled with where the car is now.</div>
-    </form>
-  </details>
-
-  {{if .Runs}}
-  <div class="list">
-    {{range .Runs}}<div class="item"><div class="t">{{clock .RanAt}}</div><div class="body">{{.RuleName}}<span class="pill {{.Status}}">{{.Status}}</span>{{if .Message}}<div class="faint">{{.Message}}</div>{{end}}</div></div>{{end}}
-  </div>
-  {{end}}
-</div>
 {{end}}

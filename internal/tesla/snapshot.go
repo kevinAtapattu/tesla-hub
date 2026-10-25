@@ -20,6 +20,9 @@ type Snapshot struct {
 	ChargingState  string // Charging, Complete, Disconnected, Stopped, ...
 	ChargeLimit    *int
 	ChargerPowerKW *float64
+	EnergyAddedKWh *float64
+	MinutesToFull  *int
+	ChargeRateKmh  *float64
 
 	InsideTempC       *float64
 	OutsideTempC      *float64
@@ -63,6 +66,9 @@ func ParseVehicleData(raw json.RawMessage) (*Snapshot, error) {
 			ChargingState  string   `json:"charging_state"`
 			ChargeLimitSOC *int     `json:"charge_limit_soc"`
 			ChargerPower   *float64 `json:"charger_power"`
+			EnergyAdded    *float64 `json:"charge_energy_added"`
+			HoursToFull    *float64 `json:"time_to_full_charge"`
+			ChargeRate     *float64 `json:"charge_rate"` // miles of range per hour
 		} `json:"charge_state"`
 		ClimateState struct {
 			InsideTemp        *float64 `json:"inside_temp"`
@@ -99,6 +105,8 @@ func ParseVehicleData(raw json.RawMessage) (*Snapshot, error) {
 		ChargingState:     r.ChargeState.ChargingState,
 		ChargeLimit:       r.ChargeState.ChargeLimitSOC,
 		ChargerPowerKW:    r.ChargeState.ChargerPower,
+		EnergyAddedKWh:    r.ChargeState.EnergyAdded,
+		ChargeRateKmh:     scale(r.ChargeState.ChargeRate, kmPerMile),
 		InsideTempC:       r.ClimateState.InsideTemp,
 		OutsideTempC:      r.ClimateState.OutsideTemp,
 		ClimateOn:         r.ClimateState.IsClimateOn,
@@ -116,6 +124,10 @@ func ParseVehicleData(raw json.RawMessage) (*Snapshot, error) {
 	}
 	if r.DriveState.ShiftState != nil {
 		s.ShiftState = *r.DriveState.ShiftState
+	}
+	if h := r.ChargeState.HoursToFull; h != nil && *h > 0 {
+		m := int(*h*60 + 0.5)
+		s.MinutesToFull = &m
 	}
 	if r.DriveState.Timestamp > 0 {
 		s.Time = time.UnixMilli(r.DriveState.Timestamp).UTC()
