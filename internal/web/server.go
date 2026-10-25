@@ -61,6 +61,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /settings", s.page("settings"))
 	mux.HandleFunc("GET /trips", s.tripsPage)
 	mux.HandleFunc("GET /trips/{id}", s.tripPage)
+	mux.HandleFunc("POST /trips/{id}/driver", s.setTripDriver)
+	mux.HandleFunc("POST /driver", s.driverCheckIn) // the phone; checks its own token
 	mux.HandleFunc("GET /live", s.livePartial)
 	mux.HandleFunc("GET /auth/login", s.login)
 	mux.HandleFunc("GET /auth/callback", s.callback) // must stay public: Tesla redirects here
@@ -93,7 +95,7 @@ func (s *Server) basicAuth(next http.Handler) http.Handler {
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, pw, ok := r.BasicAuth()
-		if r.URL.Path == "/auth/callback" || r.URL.Path == "/healthz" || r.URL.Path == "/assistant" ||
+		if r.URL.Path == "/auth/callback" || r.URL.Path == "/healthz" || r.URL.Path == "/assistant" || r.URL.Path == "/driver" ||
 			(ok && subtle.ConstantTimeCompare([]byte(pw), []byte(s.Cfg.DashboardPassword)) == 1) {
 			next.ServeHTTP(w, r)
 			return
@@ -141,6 +143,7 @@ type pageData struct {
 	AssistantOn    bool
 	AssistantModel string
 	AssistantURL   string
+	DriverURL      string
 	AssistantToken string
 	AssistantLog   []store.AssistantEntry
 
@@ -153,6 +156,10 @@ type pageData struct {
 	TripPower        chart
 	TripG            template.HTML
 	Live             *trips.Trip // drive under way
+
+	Drivers      []string
+	DriverFilter string // trips page: only this driver's trips
+	TripTotals   TripTotals
 
 	TelemetryOn     bool
 	TelemetryHost   string
@@ -314,6 +321,8 @@ func (s *Server) page(name string) http.HandlerFunc {
 		d := s.data(r.Context(), r.URL.Query().Get("range"))
 		d.Page = name
 		d.AssistantURL = requestBase(r) + "/assistant"
+		d.DriverURL = requestBase(r) + "/driver"
+		d.Drivers, _ = s.Store.Drivers(r.Context())
 		d.Flash = r.URL.Query().Get("flash")
 		d.Error = r.URL.Query().Get("error")
 		s.render(w, "index.html", d)
@@ -633,7 +642,7 @@ func funcs(loc *time.Location) template.FuncMap {
 			if t.IsZero() {
 				return "—"
 			}
-			return t.In(loc).Format("Mon Jan 2 15:04")
+			return t.In(loc).Format("Mon Jan 2, 3:04 PM")
 		},
 		"ago": func(t time.Time) string {
 			if t.IsZero() {

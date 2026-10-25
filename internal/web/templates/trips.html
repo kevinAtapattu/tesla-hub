@@ -6,13 +6,30 @@
   </div>
 </div>
 {{template "live-drive" .}}
+{{if .Drivers}}
+<div class="chips" style="margin-bottom:16px">
+  <span class="seg">
+    <a href="/trips" class="{{if not .DriverFilter}}on{{end}}">Everyone</a>
+    {{range .Drivers}}<a href="/trips?driver={{.}}" class="{{if eq . $.DriverFilter}}on{{end}}">{{.}}</a>{{end}}
+  </span>
+</div>
+{{end}}
+{{with .TripTotals}}{{if .Trips}}
+<div class="grid g4" style="margin-bottom:16px">
+  <div class="card stat"><div class="label">{{if $.DriverFilter}}{{$.DriverFilter}}'s distance{{else}}Total distance{{end}}</div>
+    <div class="value">{{nf "tt-dist" .DistanceKm 0}}<span class="unit">km</span></div><div class="hint">{{.Trips}} trip{{if ne .Trips 1}}s{{end}}</div></div>
+  <div class="card stat"><div class="label">Top speed</div><div class="value">{{nf "tt-top" .TopSpeedKmh 0}}<span class="unit">km/h</span></div><div class="hint">avg {{printf "%.0f" .AvgSpeedKmh}} km/h moving</div></div>
+  <div class="card stat"><div class="label">Best 0–100</div><div class="value">{{if .ZeroTo100}}{{secs .ZeroTo100}}{{else}}—{{end}}</div><div class="hint">{{if .MaxBrakeG}}hardest braking {{printf "%.2f" .MaxBrakeG}} g{{else}}fastest standing start{{end}}</div></div>
+  <div class="card stat"><div class="label">Efficiency</div><div class="value">{{if .WhPerKm}}{{nf "tt-eff" .WhPerKm 0}}<span class="unit">Wh/km</span>{{else}}—{{end}}</div><div class="hint">average over these trips</div></div>
+</div>
+{{end}}{{end}}
 {{if .Trips}}
 <div class="stack">
   {{range .Trips}}
   <a class="card trip-row" href="/trips/{{.ID}}">
     <div class="trip-thumb"><div class="minimap" data-path="{{index $.TripPreviewPaths .ID}}"></div>{{index $.TripPreviews .ID}}</div>
     <div class="trip-when">
-      <div class="trip-title">{{partOfDay .Start}}</div>
+      <div class="trip-title">{{partOfDay .Start}}{{if .Driver}} <span class="pill driver">{{.Driver}}</span>{{end}}</div>
       <div class="muted num">{{local .Start}} · {{hms .Duration}}</div>
     </div>
     <div class="trip-nums">
@@ -68,7 +85,14 @@
     <h1>{{partOfDay .Start}}</h1>
     <p>{{local .Start}} to {{clock .End}} · {{hms .Duration}}</p>
   </div>
-  <div class="actions"><a class="btn" href="/trips">All trips</a></div>
+  <div class="actions">
+    <form method="post" action="/trips/{{.ID}}/driver" class="chips" style="gap:6px">
+      <input type="text" name="driver" value="{{.Driver}}" placeholder="Who drove?" list="drivers" style="width:9em" aria-label="Driver">
+      <datalist id="drivers">{{range $.Drivers}}<option value="{{.}}">{{end}}</datalist>
+      <button class="btn">Save</button>
+    </form>
+    <a class="btn" href="/trips">All trips</a>
+  </div>
 </div>
 
 <div class="grid g4" style="margin-bottom:16px">

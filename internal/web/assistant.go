@@ -55,12 +55,7 @@ func (s *Server) rotateToken(ctx context.Context) (string, error) {
 // {"message": "..."}, a form field, or a plain-text body, and answers in plain
 // text so the Shortcut can hand the reply straight to Siri.
 func (s *Server) assistantAPI(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	want, err := s.AssistantToken(r.Context())
-	got := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-	if err != nil || want == "" || subtle.ConstantTimeCompare([]byte(got), []byte(want)) != 1 {
-		w.WriteHeader(http.StatusUnauthorized)
-		io.WriteString(w, "The hub didn't accept the access token. Copy it again from Settings.")
+	if !s.phoneAuthorized(w, r) {
 		return
 	}
 	message, err := readMessage(r)
@@ -74,6 +69,20 @@ func (s *Server) assistantAPI(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadGateway)
 	}
 	io.WriteString(w, reply)
+}
+
+// phoneAuthorized checks the bearer token the iPhone Shortcuts send. On failure
+// it writes a plain-text reply the Shortcut can show or speak.
+func (s *Server) phoneAuthorized(w http.ResponseWriter, r *http.Request) bool {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	want, err := s.AssistantToken(r.Context())
+	got := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+	if err != nil || want == "" || subtle.ConstantTimeCompare([]byte(got), []byte(want)) != 1 {
+		w.WriteHeader(http.StatusUnauthorized)
+		io.WriteString(w, "The hub didn't accept the access token. Copy it again from Settings.")
+		return false
+	}
+	return true
 }
 
 // assistantTry is the test box in Settings (protected by the dashboard password, not the token).

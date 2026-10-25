@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io"
 	"math"
 	"net/http"
 	"strconv"
@@ -17,9 +18,12 @@ import (
 func (s *Server) tripsPage(w http.ResponseWriter, r *http.Request) {
 	d := s.data(r.Context(), "")
 	d.Page = "trips"
+	d.DriverFilter = r.URL.Query().Get("driver")
 	if vin := s.Poller.VIN(); vin != "" {
-		d.Trips, _ = s.Store.ListTrips(r.Context(), vin, 100)
+		d.Trips, _ = s.Store.ListTrips(r.Context(), vin, d.DriverFilter, 100)
 	}
+	d.Drivers, _ = s.Store.Drivers(r.Context())
+	d.TripTotals = totals(d.Trips)
 	d.TripPreviews = map[int64]template.HTML{}
 	d.TripPreviewPaths = map[int64]string{}
 	for i := range d.Trips {
@@ -44,6 +48,7 @@ func (s *Server) tripPage(w http.ResponseWriter, r *http.Request) {
 	d := s.data(r.Context(), "")
 	d.Page = "trip"
 	d.Trip = t
+	d.Drivers, _ = s.Store.Drivers(r.Context())
 	path, _ := json.Marshal(t.Path)
 	d.TripPath = template.JS(path)
 	if t.Source == "telemetry" {
@@ -189,4 +194,87 @@ func thin(path []trips.PathPoint, n int) []trips.PathPoint {
 		out = append(out, path[int(math.Round(float64(i)*step))])
 	}
 	return out
+}
+
+// TripTotals sums up a set of trips (all of them, or one driver's).
+type TripTotals struct {
+	Trips       int
+	DistanceKm  float64
+	Hours       float64
+	TopSpeedKmh float64
+	AvgSpeedKmh float64
+	WhPerKm     float64
+	ZeroTo100   *time.Duration
+	MaxBrakeG   float64
+}
+
+func totals(ts []store.SavedTrip) TripTotals {
+	var t TripTotals
+	var moving time.Duration
+	var energy, effKm float64
+	for _, x := range ts {
+		t.Trips++
+		t.DistanceKm += x.DistanceKm
+		t.Hours += x.Duration.Hours()
+		moving += x.Moving
+		t.TopSpeedKmh = math.Max(t.TopSpeedKmh, x.MaxSpeedKmh)
+		t.MaxBrakeG = math.Max(t.MaxBrakeG, x.MaxBrakeG)
+		if x.ZeroTo100 != nil && (t.ZeroTo100 == nil || *x.ZeroTo100 < *t.ZeroTo100) {
+			t.ZeroTo100 = x.ZeroTo100
+		}
+		if x.WhPerKm() > 0 {
+			energy += x.WhPerKm() * x.DistanceKm
+			effKm += x.DistanceKm
+		}
+	}
+	if moving > 0 {
+		t.AvgSpeedKmh = t.DistanceKm / moving.Hours()
+	}
+	if effKm > 0 {
+		t.WhPerKm = energy / effKm
+	}
+	return t
+}
+
+// setTripDriver is the "Who drove?" control on a trip page.
+func (s *Server) setTripDriver(w http.ResponseWriter, r *http.Request) {
+	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	name := strings.TrimSpace(r.FormValue("driver"))
+	if len(name) > 40 {
+		name = name[:40]
+	}
+	if err := s.Store.SetTripDriver(r.Context(), id, name); err != nil {
+		http.Redirect(w, r, fmt.Sprintf("/trips/%d?error=%s", id, urlq(err.Error())), http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, fmt.Sprintf("/trips/%d?flash=%s", id, urlq("Driver saved")), http.StatusSeeOther)
+}
+
+// driverCheckIn is called by each driver's iPhone automation when the phone
+// connects to the car, e.g. POST {"name": "Kevin"}. The next trip gets that name.
+func (s *Server) driverCheckIn(w http.ResponseWriter, r *http.Request) {
+	if !s.phoneAuthorized(w, r) {
+		return
+	}
+	body, _ := io.ReadAll(io.LimitReader(r.Body, 1024))
+	name := strings.TrimSpace(string(body))
+	var v struct {
+		Name string `json:"name"`
+	}
+	if json.Unmarshal(body, &v) == nil && v.Name != "" {
+		name = strings.TrimSpace(v.Name)
+	} else if strings.HasPrefix(name, "name=") {
+		name = strings.TrimSpace(strings.TrimPrefix(name, "name="))
+	}
+	if name == "" || len(name) > 40 {
+		w.WriteHeader(http.StatusBadRequest)
+		io.WriteString(w, `Send the driver's name, e.g. {"name": "Kevin"}.`)
+		return
+	}
+	if err := s.Store.DriverCheckIn(r.Context(), name); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		io.WriteString(w, "Couldn't save: "+err.Error())
+		return
+	}
+	fmt.Fprintf(w, "Got it, %s is driving.", name)
 }

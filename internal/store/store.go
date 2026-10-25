@@ -544,7 +544,11 @@ func (s *Store) SaveTrip(ctx context.Context, vin, source string, t trips.Trip) 
 		return err
 	}
 	_, err = s.db.Exec(ctx, `
-		INSERT INTO trips (vin, start_at, end_at, source, distance_km, summary) VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO trips (vin, start_at, end_at, source, distance_km, summary, driver)
+		VALUES ($1, $2, $3, $4, $5, $6, (
+			-- the driver whose phone checked in during the 30 min before the drive, or during it
+			SELECT name FROM driver_events WHERE time BETWEEN $2::timestamptz - interval '30 minutes' AND $3
+			ORDER BY time DESC LIMIT 1))
 		ON CONFLICT (vin, start_at) DO NOTHING`, vin, t.Start, t.End, source, t.DistanceKm, summary)
 	return err
 }
@@ -553,12 +557,15 @@ func (s *Store) SaveTrip(ctx context.Context, vin, source string, t trips.Trip) 
 type SavedTrip struct {
 	ID     int64
 	Source string
+	Driver string // "" when nobody checked in
 	trips.Trip
 }
 
-func (s *Store) ListTrips(ctx context.Context, vin string, limit int) ([]SavedTrip, error) {
+// ListTrips returns the newest trips, optionally only one driver's ("" for all).
+func (s *Store) ListTrips(ctx context.Context, vin, driver string, limit int) ([]SavedTrip, error) {
 	rows, err := s.db.Query(ctx, `
-		SELECT id, source, summary FROM trips WHERE vin = $1 ORDER BY start_at DESC LIMIT $2`, vin, limit)
+		SELECT id, source, coalesce(driver, ''), summary FROM trips
+		WHERE vin = $1 AND ($2 = '' OR driver = $2) ORDER BY start_at DESC LIMIT $3`, vin, driver, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -567,7 +574,7 @@ func (s *Store) ListTrips(ctx context.Context, vin string, limit int) ([]SavedTr
 	for rows.Next() {
 		var t SavedTrip
 		var raw []byte
-		if err := rows.Scan(&t.ID, &t.Source, &raw); err != nil {
+		if err := rows.Scan(&t.ID, &t.Source, &t.Driver, &raw); err != nil {
 			return nil, err
 		}
 		if err := json.Unmarshal(raw, &t.Trip); err != nil {
@@ -582,7 +589,7 @@ func (s *Store) ListTrips(ctx context.Context, vin string, limit int) ([]SavedTr
 func (s *Store) GetTrip(ctx context.Context, id int64) (*SavedTrip, error) {
 	t := &SavedTrip{ID: id}
 	var raw []byte
-	err := s.db.QueryRow(ctx, `SELECT source, summary FROM trips WHERE id = $1`, id).Scan(&t.Source, &raw)
+	err := s.db.QueryRow(ctx, `SELECT source, coalesce(driver, ''), summary FROM trips WHERE id = $1`, id).Scan(&t.Source, &t.Driver, &raw)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -604,4 +611,39 @@ func (s *Store) TripSamples(ctx context.Context, vin string, from, to time.Time)
 		}
 	}
 	return all, nil
+}
+
+// --- drivers ---
+
+// DriverCheckIn records that name is about to drive (their phone connected to the car).
+func (s *Store) DriverCheckIn(ctx context.Context, name string) error {
+	_, err := s.db.Exec(ctx, `INSERT INTO driver_events (name) VALUES ($1)`, name)
+	return err
+}
+
+// SetTripDriver changes who drove a trip ("" clears it).
+func (s *Store) SetTripDriver(ctx context.Context, id int64, name string) error {
+	_, err := s.db.Exec(ctx, `UPDATE trips SET driver = nullif($2, '') WHERE id = $1`, id, name)
+	return err
+}
+
+// Drivers lists every driver name seen, most active first.
+func (s *Store) Drivers(ctx context.Context) ([]string, error) {
+	rows, err := s.db.Query(ctx, `
+		SELECT name FROM (SELECT driver AS name FROM trips WHERE driver IS NOT NULL
+		                  UNION ALL SELECT name FROM driver_events) n
+		GROUP BY name ORDER BY count(*) DESC, name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var n string
+		if err := rows.Scan(&n); err != nil {
+			return nil, err
+		}
+		out = append(out, n)
+	}
+	return out, rows.Err()
 }

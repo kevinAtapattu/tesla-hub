@@ -157,3 +157,13 @@ CREATE TABLE IF NOT EXISTS trips (
     UNIQUE (vin, start_at)
 );
 CREATE INDEX IF NOT EXISTS trips_vin_start ON trips (vin, start_at DESC);
+
+-- Who drove. The car doesn't report its driver profile, so each driver's phone
+-- tells the hub ("Kevin is driving") when it connects to the car's Bluetooth,
+-- and a trip takes the latest such event from shortly before it started.
+CREATE TABLE IF NOT EXISTS driver_events (
+    time timestamptz NOT NULL DEFAULT now(),
+    name text NOT NULL
+);
+CREATE INDEX IF NOT EXISTS driver_events_time ON driver_events (time DESC);
+ALTER TABLE trips ADD COLUMN IF NOT EXISTS driver text;

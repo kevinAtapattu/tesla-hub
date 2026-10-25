@@ -57,6 +57,21 @@
     </details>
   </div>
 
+  <div class="card span2" id="drivers">
+    <h2 class="card-title">Drivers</h2>
+    <p class="muted" style="margin:-4px 0 16px">The car doesn't say which driver profile is in use, so each driver's phone tells the hub instead. Trips are tagged with whoever checked in during the 30 minutes before the drive. You can also change the driver on any trip.</p>
+    <details>
+      <summary class="sub-title" style="cursor:pointer;margin:0">Set it up on a driver's iPhone (once per person)</summary>
+      <ol style="margin:12px 0 0;padding-left:20px;display:grid;gap:8px;font-size:14px">
+        <li>Shortcuts app → <b>Automation</b> → <b>+</b> → <b>Bluetooth</b> → choose the car → <b>Is Connected</b> → <b>Run Immediately</b>.</li>
+        <li>Add <b>Get Contents of URL</b>: <span class="mono">{{.DriverURL}}</span>, method <b>POST</b>.</li>
+        <li>Header <span class="mono">Authorization</span> = <span class="mono">Bearer</span> + the token (under Assistant above).</li>
+        <li>Request Body <b>JSON</b>: key <span class="mono">name</span>, value the driver's name, e.g. <span class="mono">Kevin</span>.</li>
+      </ol>
+    </details>
+    {{if .Drivers}}<div class="chips" style="margin-top:16px">{{range .Drivers}}<a class="pill" href="/trips?driver={{.}}">{{.}}</a>{{end}}</div>{{end}}
+  </div>
+
   <div class="card span2">
     <h2 class="card-title">Comfort preferences</h2>
     <form method="post" action="/settings/prefs" style="display:grid;gap:20px">

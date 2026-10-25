@@ -31,7 +31,9 @@ func TestTemplatesRender(t *testing.T) {
 	zt := 4800 * time.Millisecond
 	trip := trips.Trip{Start: time.Now().Add(-time.Hour), End: time.Now(), DistanceKm: 12.3, MaxSpeedKmh: 104, ZeroTo100: &zt,
 		SocStart: &f, SocEnd: &f, EnergyKWh: 2, Path: []trips.PathPoint{{Lat: 43.6, Lon: -79.8, Speed: 50}}}
-	pages[1].Trips = []store.SavedTrip{{ID: 1, Source: "telemetry", Trip: trip}, {ID: 2, Source: "polling", Trip: trip}}
+	pages[1].Trips = []store.SavedTrip{{ID: 1, Source: "telemetry", Driver: "Kevin", Trip: trip}, {ID: 2, Source: "polling", Trip: trip}}
+	pages[1].Drivers, pages[1].DriverFilter = []string{"Kevin", "Sam"}, "Kevin"
+	pages[1].TripTotals = totals(pages[1].Trips)
 	pages[1].Trip = &store.SavedTrip{ID: 1, Source: "telemetry", Trip: trip}
 	pages[1].TripPath = template.JS(`[{"lat":43.6,"lon":-79.8,"s":50}]`)
 	pages[1].Live = &trip
