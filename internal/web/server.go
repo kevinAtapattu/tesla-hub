@@ -172,9 +172,10 @@ type pageData struct {
 	TelemetryStatus telemetry.Status
 	TelemetryNote   string // result of the last configure/check, shown in the card
 
-	AlertsOn   bool
-	Alerts     alerts.Settings
-	AlertsNote string
+	AlertsOn    bool
+	AlertsReady bool // the iMessage relay is configured
+	Alerts      alerts.Settings
+	AlertsNote  string
 
 	// DrivingEvery is the poll interval while driving, shown so the speed chart isn't mistaken for live data.
 	DrivingEvery string

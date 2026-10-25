@@ -39,7 +39,7 @@ func TestTemplatesRender(t *testing.T) {
 	pages[1].TripPath = template.JS(`[{"lat":43.6,"lon":-79.8,"s":50}]`)
 	pages[1].Live = &trip
 	pages[1].AlertsOn, pages[1].AlertsNote = true, "Test sent."
-	pages[1].Alerts = alerts.Settings{Mode: alerts.Next, Topic: "tesla-hub-abc", LastAt: time.Now()}
+	pages[1].Alerts = alerts.Settings{Mode: alerts.Next, LastAt: time.Now()}
 	for i, d := range pages {
 		for _, page := range []string{"dashboard", "controls", "schedules", "settings", "trips", "trip"} {
 			d.Page = page

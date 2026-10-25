@@ -1,13 +1,11 @@
-// Package alerts pushes a phone notification when the car starts a drive, using
-// ntfy (https://ntfy.sh): the hub posts to a random topic and the ntfy app on the
-// phone, subscribed to that topic, shows it.
+// Package alerts texts the phone when the car starts a drive. The text goes out
+// as an iMessage through cmd/imessage-relay, which runs on the Mac itself.
 package alerts
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
+	"io"
 	"log/slog"
 	"math"
 	"net/http"
@@ -27,7 +25,6 @@ const (
 	stale = 2 * time.Minute
 
 	settingKey = "drive_alerts"
-	server     = "https://ntfy.sh"
 )
 
 // Modes for Settings.Mode.
@@ -40,7 +37,6 @@ const (
 // Settings is what's saved in the settings table.
 type Settings struct {
 	Mode   string    `json:"mode"`
-	Topic  string    `json:"topic"`
 	LastAt time.Time `json:"last_at,omitempty"` // last drive alert sent
 }
 
@@ -85,10 +81,11 @@ type Store interface {
 
 // Watcher gets every telemetry record and sends the alert.
 type Watcher struct {
-	Store    Store
-	ClickURL string // opened when the notification is tapped
-	Location *time.Location
-	Client   *http.Client
+	Store      Store
+	RelayURL   string // the iMessage relay, e.g. http://host.docker.internal:8097
+	RelayToken string
+	Location   *time.Location
+	Client     *http.Client
 
 	once      sync.Once
 	ch        chan *telemetry.Point
@@ -150,14 +147,15 @@ func (w *Watcher) handle(ctx context.Context, p *telemetry.Point) {
 	if err != nil || s.Mode == Off {
 		return
 	}
-	msg := "Started driving at " + p.Time.In(w.Location).Format("3:04 PM")
+	msg := "🚗 The car started driving at " + p.Time.In(w.Location).Format("3:04 PM")
 	if soc, ok := w.soc[p.VIN]; ok {
-		msg += fmt.Sprintf(" · battery %.0f%%", math.Round(soc))
+		msg += fmt.Sprintf(", battery %.0f%%", math.Round(soc))
 	}
+	msg += "."
 	if s.Mode == Next {
-		msg += ". Alerts are off now; turn them on again in Settings."
+		msg += " Drive alerts are off again until you turn them back on."
 	}
-	if err := w.Send(ctx, s.Topic, "The car is moving", msg); err != nil {
+	if err := w.Send(ctx, msg); err != nil {
 		slog.Error("drive alert", "err", err)
 		return
 	}
@@ -171,19 +169,10 @@ func (w *Watcher) handle(ctx context.Context, p *telemetry.Point) {
 	}
 }
 
-// Settings returns the saved settings, creating the topic on first use.
 func (w *Watcher) Settings(ctx context.Context) (Settings, error) {
 	s := Settings{Mode: Off}
-	if _, err := w.Store.GetSetting(ctx, settingKey, &s); err != nil {
-		return s, err
-	}
-	if s.Topic == "" {
-		b := make([]byte, 16)
-		rand.Read(b)
-		s.Topic = "tesla-hub-" + hex.EncodeToString(b)
-		return s, w.Store.SetSetting(ctx, settingKey, s)
-	}
-	return s, nil
+	_, err := w.Store.GetSetting(ctx, settingKey, &s)
+	return s, err
 }
 
 func (w *Watcher) SetMode(ctx context.Context, mode string) error {
@@ -198,29 +187,31 @@ func (w *Watcher) SetMode(ctx context.Context, mode string) error {
 	return w.Store.SetSetting(ctx, settingKey, s)
 }
 
-// Send posts a notification to the topic.
-func (w *Watcher) Send(ctx context.Context, topic, title, msg string) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, server+"/"+topic, strings.NewReader(msg))
+// Ready says whether the relay is configured.
+func (w *Watcher) Ready() bool { return w.RelayURL != "" && w.RelayToken != "" }
+
+// Send texts msg through the relay.
+func (w *Watcher) Send(ctx context.Context, msg string) error {
+	if !w.Ready() {
+		return fmt.Errorf("set IMESSAGE_RELAY_TOKEN in .env and start the relay")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, w.RelayURL+"/send", strings.NewReader(msg))
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Title", title)
-	req.Header.Set("Tags", "red_car")
-	req.Header.Set("Priority", "high")
-	if w.ClickURL != "" {
-		req.Header.Set("Click", w.ClickURL)
-	}
+	req.Header.Set("Authorization", "Bearer "+w.RelayToken)
 	c := w.Client
 	if c == nil {
-		c = &http.Client{Timeout: 15 * time.Second}
+		c = &http.Client{Timeout: 30 * time.Second}
 	}
 	resp, err := c.Do(req)
 	if err != nil {
-		return err
+		return fmt.Errorf("the iMessage relay on the Mac isn't reachable: %w", err)
 	}
-	resp.Body.Close()
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("ntfy: %s", resp.Status)
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 500))
+		return fmt.Errorf("iMessage relay: %s %s", resp.Status, strings.TrimSpace(string(body)))
 	}
 	return nil
 }

@@ -11,6 +11,7 @@ func (s *Server) alertData(ctx context.Context, d *pageData) {
 	}
 	d.AlertsOn = true
 	d.Alerts, _ = s.Alerts.Settings(ctx)
+	d.AlertsReady = s.Alerts.Ready()
 }
 
 func (s *Server) renderAlerts(w http.ResponseWriter, r *http.Request, note string) {
@@ -37,12 +38,8 @@ func (s *Server) testAlert(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	note := "Test sent. It should show up on your phone in a few seconds."
-	st, err := s.Alerts.Settings(r.Context())
-	if err == nil {
-		err = s.Alerts.Send(r.Context(), st.Topic, "Test from Tesla Hub", "Drive alerts work. You'll get one like this when the car starts moving.")
-	}
-	if err != nil {
+	note := "Test sent. It should arrive as an iMessage in a few seconds."
+	if err := s.Alerts.Send(r.Context(), "🚗 Test from Tesla Hub: drive alerts work. You'll get a text like this when the car starts moving."); err != nil {
 		note = "Test failed: " + err.Error()
 	}
 	s.renderAlerts(w, r, note)

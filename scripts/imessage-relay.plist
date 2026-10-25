@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Copy to ~/Library/LaunchAgents/com.tesla-hub.imessage-relay.plist, fix the paths, then
+     launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.tesla-hub.imessage-relay.plist -->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.tesla-hub.imessage-relay</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/kevin/.local/bin/imessage-relay</string>
+    <string>-env</string><string>/Users/kevin/Developer/tesla-hub/.env</string>
+  </array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardErrorPath</key><string>/Users/kevin/Library/Logs/imessage-relay.log</string>
+</dict>
+</plist>

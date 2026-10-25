@@ -101,10 +101,7 @@ func serve(ctx context.Context, cfg *config.Config) error {
 	go sched.Run(ctx)
 	tripBuilder := &trips.Builder{Store: st, VIN: p.VIN}
 	go tripBuilder.Run(ctx)
-	driveAlerts := &alerts.Watcher{Store: st, Location: cfg.Location}
-	if cfg.TelemetryHost != "" {
-		driveAlerts.ClickURL = "https://" + cfg.TelemetryHost + ":8444/" // the dashboard over Tailscale
-	}
+	driveAlerts := &alerts.Watcher{Store: st, Location: cfg.Location, RelayURL: cfg.IMessageRelayURL, RelayToken: cfg.IMessageRelayToken}
 	go driveAlerts.Run(ctx)
 	var feed *telemetry.Receiver
 	if cfg.TelemetryHost != "" {
