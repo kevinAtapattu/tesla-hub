@@ -283,6 +283,7 @@ func (s *Server) page(name string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		d := s.data(r.Context(), r.URL.Query().Get("range"))
 		d.Page = name
+		d.AssistantURL = requestBase(r) + "/assistant"
 		d.Flash = r.URL.Query().Get("flash")
 		d.Error = r.URL.Query().Get("error")
 		s.render(w, "index.html", d)
@@ -688,4 +689,18 @@ func usageTotal(u map[string]int) int {
 		n += v
 	}
 	return n
+}
+
+// requestBase is how the browser reached the hub, e.g. https://tesla-hub.tailnet.ts.net
+// through Tailscale, so links shown on the page work from the phone too.
+func requestBase(r *http.Request) string {
+	scheme := "http"
+	if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+		scheme = "https"
+	}
+	host := r.Host
+	if h := r.Header.Get("X-Forwarded-Host"); h != "" {
+		host = h
+	}
+	return scheme + "://" + host
 }
