@@ -190,6 +190,7 @@ func (s *Server) data(ctx context.Context, rangeParam string) pageData {
 	d.Connected = s.Auth.Connected(ctx)
 	if d.Status.VIN != "" {
 		d.Latest, _ = s.Store.LatestSnapshot(ctx, d.Status.VIN)
+		s.overlayLive(ctx, &d)
 	}
 	d.Usage, _ = s.Store.MonthUsage(ctx)
 	d.UsageCost = estimateCost(d.Usage)

@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -79,6 +80,31 @@ func (s *Server) liveTrip(r *http.Request) *trips.Trip {
 	}
 	t, _ := s.Trips.Current(r.Context(), s.Poller.VIN(), time.Now())
 	return t
+}
+
+// overlayLive puts the streamed speed and position over the last poll, which
+// can be 20 minutes old when a drive has just started.
+func (s *Server) overlayLive(ctx context.Context, d *pageData) {
+	if s.Trips == nil || d.Latest == nil {
+		return
+	}
+	t, _ := s.Trips.Current(ctx, d.Status.VIN, time.Now())
+	if t == nil || len(t.Path) == 0 {
+		return
+	}
+	snap := *d.Latest
+	end := t.Path[len(t.Path)-1]
+	speed, lat, lon := end.Speed, end.Lat, end.Lon
+	snap.SpeedKmh, snap.Latitude, snap.Longitude = &speed, &lat, &lon
+	if !snap.Driving() {
+		snap.ShiftState = "D"
+	}
+	if t.SocEnd != nil {
+		n := int(math.Round(*t.SocEnd))
+		snap.BatteryLevel = &n
+	}
+	d.Latest = &snap
+	d.Status.State = "online"
 }
 
 // frictionCircle plots every lateral/longitudinal g reading as a dot inside

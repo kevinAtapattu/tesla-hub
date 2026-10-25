@@ -101,7 +101,8 @@ func serve(ctx context.Context, cfg *config.Config) error {
 	go sched.Run(ctx)
 	tripBuilder := &trips.Builder{Store: st, VIN: p.VIN}
 	go tripBuilder.Run(ctx)
-	driveAlerts := &alerts.Watcher{Store: st, Location: cfg.Location, Webhook: cfg.DiscordWebhook, MentionID: cfg.DiscordUserID}
+	driveAlerts := &alerts.Watcher{Store: st, Location: cfg.Location, Webhook: cfg.DiscordWebhook, MentionID: cfg.DiscordUserID,
+		OnStart: p.Nudge} // poll right away so the dashboard switches to driving
 	go driveAlerts.Run(ctx)
 	var feed *telemetry.Receiver
 	if cfg.TelemetryHost != "" {

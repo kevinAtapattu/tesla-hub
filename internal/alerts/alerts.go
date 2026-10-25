@@ -89,6 +89,7 @@ type Watcher struct {
 	MentionID string // Discord user ID to @mention, so the phone notifies
 	Location  *time.Location
 	Client    *http.Client
+	OnStart   func() // called when a drive starts, whether or not alerts are on
 
 	once      sync.Once
 	ch        chan *telemetry.Point
@@ -145,6 +146,9 @@ func (w *Watcher) handle(ctx context.Context, p *telemetry.Point) {
 	}
 	if !d.Observe(p.Time, p.Gear, p.SpeedKmh) || time.Since(p.Time) > stale {
 		return
+	}
+	if w.OnStart != nil {
+		w.OnStart()
 	}
 	s, err := w.Settings(ctx)
 	if err != nil || s.Mode == Off {
