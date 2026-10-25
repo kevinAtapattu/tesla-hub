@@ -8,6 +8,7 @@ import (
 	"embed"
 	"encoding/hex"
 	"fmt"
+	"github.com/kevin/tesla-hub/internal/alerts"
 	"html/template"
 	"log/slog"
 	"math"
@@ -45,6 +46,8 @@ type Server struct {
 	Trips *trips.Builder
 	// Telemetry is the live feed from the car; nil when TELEMETRY_HOST isn't set.
 	Telemetry *telemetry.Receiver
+	// Alerts sends a phone notification when the car starts a drive.
+	Alerts *alerts.Watcher
 	// Assistant answers messages like "warm it up, I'll be there in 15". Nil without an API key.
 	Assistant *assistant.Assistant
 
@@ -83,6 +86,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /settings/prefs", s.savePrefs)
 	mux.HandleFunc("POST /telemetry/configure", s.configureTelemetry)
 	mux.HandleFunc("POST /telemetry/check", s.checkTelemetry)
+	mux.HandleFunc("POST /alerts/mode", s.setAlertMode)
+	mux.HandleFunc("POST /alerts/test", s.testAlert)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("ok")) })
 	return s.basicAuth(mux)
 }
@@ -166,6 +171,10 @@ type pageData struct {
 	TelemetryPort   int
 	TelemetryStatus telemetry.Status
 	TelemetryNote   string // result of the last configure/check, shown in the card
+
+	AlertsOn   bool
+	Alerts     alerts.Settings
+	AlertsNote string
 
 	// DrivingEvery is the poll interval while driving, shown so the speed chart isn't mistaken for live data.
 	DrivingEvery string
@@ -323,6 +332,7 @@ func (s *Server) page(name string) http.HandlerFunc {
 		d.AssistantURL = requestBase(r) + "/assistant"
 		d.DriverURL = requestBase(r) + "/driver"
 		d.Drivers, _ = s.Store.Drivers(r.Context())
+		s.alertData(r.Context(), &d)
 		d.Flash = r.URL.Query().Get("flash")
 		d.Error = r.URL.Query().Get("error")
 		s.render(w, "index.html", d)

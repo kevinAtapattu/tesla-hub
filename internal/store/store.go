@@ -477,6 +477,30 @@ func (s *Store) InsertTelemetryEvent(ctx context.Context, vin, kind string, t ti
 
 // --- trips ---
 
+// DriveState is the car's last gear before a time and when it was last driving,
+// for picking up drive detection after the hub restarts.
+func (s *Store) DriveState(ctx context.Context, vin string, before time.Time) (string, time.Time, error) {
+	var gear *string
+	var last *time.Time
+	err := s.db.QueryRow(ctx, `
+		SELECT
+			(SELECT gear FROM telemetry WHERE vin = $1 AND time < $2 AND gear IS NOT NULL AND NOT resend ORDER BY time DESC LIMIT 1),
+			(SELECT max(time) FROM telemetry WHERE vin = $1 AND time < $2 AND NOT resend
+				AND (gear IN ('D', 'R', 'N') OR speed_kmh > 5))`, vin, before).Scan(&gear, &last)
+	if err != nil {
+		return "", time.Time{}, err
+	}
+	var g string
+	var t time.Time
+	if gear != nil {
+		g = *gear
+	}
+	if last != nil {
+		t = *last
+	}
+	return g, t, nil
+}
+
 // TelemetrySamples returns telemetry records after the given time, oldest first.
 // Fields a record didn't carry are nil; trips.Fill carries values forward.
 func (s *Store) TelemetrySamples(ctx context.Context, vin string, after time.Time, limit int) ([]trips.Sample, error) {

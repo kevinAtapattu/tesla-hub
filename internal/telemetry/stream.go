@@ -51,8 +51,9 @@ type Store interface {
 
 // Receiver subscribes to the fleet-telemetry server's ZMQ feed and stores what arrives.
 type Receiver struct {
-	Addr  string // e.g. tcp://telemetry:5284
-	Store Store
+	Addr    string // e.g. tcp://telemetry:5284
+	Store   Store
+	OnPoint func(*Point) // called with each stored record; must not block
 
 	mu     sync.Mutex
 	status Status
@@ -130,6 +131,9 @@ func (r *Receiver) handle(ctx context.Context, topic string, payload []byte) {
 		}
 		if err := r.Store.InsertTelemetry(ctx, p); err != nil {
 			slog.Error("store telemetry", "err", err)
+		}
+		if r.OnPoint != nil {
+			r.OnPoint(p)
 		}
 		// Each value received is one billable "streaming signal".
 		r.Store.CountRequests(ctx, "signal", len(p.Data))

@@ -1,6 +1,7 @@
 package web
 
 import (
+	"github.com/kevin/tesla-hub/internal/alerts"
 	"html/template"
 	"strings"
 	"testing"
@@ -37,6 +38,8 @@ func TestTemplatesRender(t *testing.T) {
 	pages[1].Trip = &store.SavedTrip{ID: 1, Source: "telemetry", Trip: trip}
 	pages[1].TripPath = template.JS(`[{"lat":43.6,"lon":-79.8,"s":50}]`)
 	pages[1].Live = &trip
+	pages[1].AlertsOn, pages[1].AlertsNote = true, "Test sent."
+	pages[1].Alerts = alerts.Settings{Mode: alerts.Next, Topic: "tesla-hub-abc", LastAt: time.Now()}
 	for i, d := range pages {
 		for _, page := range []string{"dashboard", "controls", "schedules", "settings", "trips", "trip"} {
 			d.Page = page
@@ -45,7 +48,7 @@ func TestTemplatesRender(t *testing.T) {
 				t.Fatalf("data %d page %s: %v", i, page, err)
 			}
 		}
-		for _, name := range []string{"departures", "rules", "assistant-log", "telemetry-card", "live-drive"} {
+		for _, name := range []string{"departures", "rules", "assistant-log", "telemetry-card", "alerts-card", "live-drive"} {
 			var sb strings.Builder
 			if err := tmpl.ExecuteTemplate(&sb, name, d); err != nil {
 				t.Fatalf("data %d partial %s: %v", i, name, err)

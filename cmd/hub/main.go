@@ -11,6 +11,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/kevin/tesla-hub/internal/alerts"
 	"io"
 	"log/slog"
 	"net/http"
@@ -100,13 +101,18 @@ func serve(ctx context.Context, cfg *config.Config) error {
 	go sched.Run(ctx)
 	tripBuilder := &trips.Builder{Store: st, VIN: p.VIN}
 	go tripBuilder.Run(ctx)
+	driveAlerts := &alerts.Watcher{Store: st, Location: cfg.Location}
+	if cfg.TelemetryHost != "" {
+		driveAlerts.ClickURL = "https://" + cfg.TelemetryHost + ":8444/" // the dashboard over Tailscale
+	}
+	go driveAlerts.Run(ctx)
 	var feed *telemetry.Receiver
 	if cfg.TelemetryHost != "" {
-		feed = &telemetry.Receiver{Addr: cfg.TelemetryZMQ, Store: st}
+		feed = &telemetry.Receiver{Addr: cfg.TelemetryZMQ, Store: st, OnPoint: driveAlerts.Observe}
 		go feed.Run(ctx)
 	}
 
-	dash := &web.Server{Cfg: cfg, Auth: auth, Store: st, Poller: p, Commander: commander, Weather: &weather.Client{}, RunScheduler: sched.Nudge, Telemetry: feed, Trips: tripBuilder}
+	dash := &web.Server{Cfg: cfg, Auth: auth, Store: st, Poller: p, Commander: commander, Weather: &weather.Client{}, RunScheduler: sched.Nudge, Telemetry: feed, Trips: tripBuilder, Alerts: driveAlerts}
 	dash.Assistant = assistant.New(cfg.AnthropicAPIKey, cfg.AssistantModel, dash.AssistantActions(), cfg.Location)
 	if dash.Assistant == nil {
 		slog.Info("assistant off: set ANTHROPIC_API_KEY to enable it")

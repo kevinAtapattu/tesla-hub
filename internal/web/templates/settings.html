@@ -32,6 +32,7 @@
     </ol>
   </div>
 
+  {{template "alerts-card" .}}
   {{template "telemetry-card" .}}
 
   <div class="card span2" id="assistant">
@@ -157,4 +158,37 @@
   <div class="callout" style="margin:0">Set <code>TELEMETRY_HOST</code> in <code>.env</code> to the public name the car should connect to.</div>
   {{end}}
 </div>
+{{end}}
+
+{{define "alerts-card"}}
+{{if .AlertsOn}}
+<div class="card span2" id="alerts">
+  <h2 class="card-title">Drive alerts
+    {{if eq .Alerts.Mode "next"}}<span class="pill green"><span class="dot green pulse"></span>Next drive</span>
+    {{else if eq .Alerts.Mode "every"}}<span class="pill green"><span class="dot green"></span>Every drive</span>
+    {{else}}<span class="pill">Off</span>{{end}}</h2>
+  <p class="muted" style="margin:-4px 0 16px">Get a notification on your phone the moment the car starts driving. Short moves, like reversing out of a spot after a stop, don't count; the car has to have been parked for 10 minutes.</p>
+  <div class="seg" style="margin-bottom:16px">
+    <button hx-post="/alerts/mode" hx-vals='{"mode":"off"}' hx-target="#alerts" hx-swap="outerHTML" class="{{if eq .Alerts.Mode "off"}}on{{end}}">Off</button>
+    <button hx-post="/alerts/mode" hx-vals='{"mode":"next"}' hx-target="#alerts" hx-swap="outerHTML" class="{{if eq .Alerts.Mode "next"}}on{{end}}">Next drive only</button>
+    <button hx-post="/alerts/mode" hx-vals='{"mode":"every"}' hx-target="#alerts" hx-swap="outerHTML" class="{{if eq .Alerts.Mode "every"}}on{{end}}">Every drive</button>
+  </div>
+  <div class="rows">
+    <div class="row"><span>Last alert</span><span>{{if .Alerts.LastAt.IsZero}}none yet{{else}}{{ago .Alerts.LastAt}}{{end}}</span></div>
+  </div>
+  {{if .AlertsNote}}<div class="callout">{{.AlertsNote}}</div>{{end}}
+  <details style="margin-top:16px">
+    <summary class="sub-title" style="cursor:pointer;margin:0">Set up your phone (once)</summary>
+    <ol style="margin:12px 0 0;padding-left:20px;display:grid;gap:8px;font-size:14px">
+      <li>Install <a href="https://apps.apple.com/app/ntfy/id1625396347" target="_blank" rel="noopener"><b>ntfy</b></a> from the App Store and allow notifications.</li>
+      <li>Tap <b>+</b> and enter this topic: <span class="mono" style="word-break:break-all">{{.Alerts.Topic}}</span></li>
+      <li>Tap <b>Subscribe</b>, then <b>Send test</b> below.</li>
+    </ol>
+    <p class="muted" style="font-size:13px;margin:12px 0 0">The topic name is the only key, so keep it private. Alerts say only the time and battery level, never where the car is.</p>
+  </details>
+  <div class="actions" style="margin-top:16px">
+    <button class="btn" hx-post="/alerts/test" hx-target="#alerts" hx-swap="outerHTML" hx-disabled-elt="this">Send test</button>
+  </div>
+</div>
+{{end}}
 {{end}}
