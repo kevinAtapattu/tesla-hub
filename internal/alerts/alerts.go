@@ -204,7 +204,7 @@ func (w *Watcher) Send(ctx context.Context, msg string) error {
 	}
 	body := map[string]any{"username": "Tesla Hub", "content": msg, "allowed_mentions": map[string]any{"parse": []string{}}}
 	if w.MentionID != "" {
-		body["content"] = "<@" + w.MentionID + "> " + msg
+		body["content"] = msg + " <@" + w.MentionID + ">"
 		body["allowed_mentions"] = map[string]any{"users": []string{w.MentionID}}
 	}
 	raw, _ := json.Marshal(body)
