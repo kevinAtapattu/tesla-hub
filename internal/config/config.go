@@ -16,11 +16,13 @@ type Config struct {
 	Region       string // na or eu
 	VIN          string // optional; first vehicle on the account if empty
 
-	PublicBaseURL  string // how your browser reaches the hub, e.g. http://localhost:8095
-	ListenAddr     string
-	DatabaseURL    string
-	PrivateKeyPath string
-	PublicKeyPath  string
+	PublicBaseURL string // how your browser reaches the hub, e.g. http://localhost:8095
+	ListenAddr    string
+	// PublicKeyListenAddr serves only the public key; this is what goes on the internet.
+	PublicKeyListenAddr string
+	DatabaseURL         string
+	PrivateKeyPath      string
+	PublicKeyPath       string
 
 	Location          *time.Location
 	DashboardPassword string // optional HTTP basic auth password
@@ -31,6 +33,13 @@ type Config struct {
 	ChargingInterval   time.Duration
 	ParkedInterval     time.Duration // parked but awake; after one sample we back off so it can sleep
 	MonthlyBudget      int           // max billable requests per calendar month before throttling
+
+	// Fleet Telemetry: the car streams to TelemetryHost:TelemetryPort (public, via
+	// Tailscale Funnel), and the fleet-telemetry server republishes to TelemetryZMQ.
+	TelemetryHost     string
+	TelemetryPort     int
+	TelemetryZMQ      string
+	TelemetryCertsDir string
 
 	AnthropicAPIKey string // enables the assistant ("warm it up, I'll be there in 15")
 	AssistantModel  string
@@ -43,25 +52,30 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("TZ %q: %w", tz, err)
 	}
 	c := &Config{
-		ClientID:           os.Getenv("TESLA_CLIENT_ID"),
-		ClientSecret:       os.Getenv("TESLA_CLIENT_SECRET"),
-		Domain:             strings.TrimSuffix(strings.TrimPrefix(os.Getenv("TESLA_DOMAIN"), "https://"), "/"),
-		Region:             env("TESLA_REGION", "na"),
-		VIN:                os.Getenv("TESLA_VIN"),
-		PublicBaseURL:      strings.TrimSuffix(env("PUBLIC_BASE_URL", "http://localhost:8095"), "/"),
-		ListenAddr:         env("LISTEN_ADDR", ":8095"),
-		DatabaseURL:        env("DATABASE_URL", "postgres://tesla:tesla@localhost:5495/tesla?sslmode=disable"),
-		PrivateKeyPath:     env("PRIVATE_KEY_PATH", "secrets/private-key.pem"),
-		PublicKeyPath:      env("PUBLIC_KEY_PATH", "public-key-site/.well-known/appspecific/com.tesla.3p.public-key.pem"),
-		Location:           loc,
-		DashboardPassword:  os.Getenv("DASHBOARD_PASSWORD"),
-		SleepCheckInterval: envDuration("POLL_SLEEP_CHECK", 20*time.Minute),
-		DrivingInterval:    envDuration("POLL_DRIVING", 2*time.Minute),
-		ChargingInterval:   envDuration("POLL_CHARGING", 5*time.Minute),
-		ParkedInterval:     envDuration("POLL_PARKED", 20*time.Minute),
-		MonthlyBudget:      envInt("MONTHLY_REQUEST_BUDGET", 4000),
-		AnthropicAPIKey:    os.Getenv("ANTHROPIC_API_KEY"),
-		AssistantModel:     env("ASSISTANT_MODEL", "claude-opus-5-5"),
+		ClientID:            os.Getenv("TESLA_CLIENT_ID"),
+		ClientSecret:        os.Getenv("TESLA_CLIENT_SECRET"),
+		Domain:              strings.TrimSuffix(strings.TrimPrefix(os.Getenv("TESLA_DOMAIN"), "https://"), "/"),
+		Region:              env("TESLA_REGION", "na"),
+		VIN:                 os.Getenv("TESLA_VIN"),
+		PublicBaseURL:       strings.TrimSuffix(env("PUBLIC_BASE_URL", "http://localhost:8095"), "/"),
+		ListenAddr:          env("LISTEN_ADDR", ":8095"),
+		PublicKeyListenAddr: env("PUBLIC_KEY_LISTEN_ADDR", ":8096"),
+		DatabaseURL:         env("DATABASE_URL", "postgres://tesla:tesla@localhost:5495/tesla?sslmode=disable"),
+		PrivateKeyPath:      env("PRIVATE_KEY_PATH", "secrets/private-key.pem"),
+		PublicKeyPath:       env("PUBLIC_KEY_PATH", "public-key-site/.well-known/appspecific/com.tesla.3p.public-key.pem"),
+		Location:            loc,
+		DashboardPassword:   os.Getenv("DASHBOARD_PASSWORD"),
+		SleepCheckInterval:  envDuration("POLL_SLEEP_CHECK", 20*time.Minute),
+		DrivingInterval:     envDuration("POLL_DRIVING", 2*time.Minute),
+		ChargingInterval:    envDuration("POLL_CHARGING", 5*time.Minute),
+		ParkedInterval:      envDuration("POLL_PARKED", 20*time.Minute),
+		MonthlyBudget:       envInt("MONTHLY_REQUEST_BUDGET", 4000),
+		TelemetryHost:       os.Getenv("TELEMETRY_HOST"),
+		TelemetryPort:       envInt("TELEMETRY_PORT", 8443),
+		TelemetryZMQ:        env("TELEMETRY_ZMQ", "tcp://telemetry:5284"),
+		TelemetryCertsDir:   env("TELEMETRY_CERTS_DIR", "secrets/telemetry"),
+		AnthropicAPIKey:     os.Getenv("ANTHROPIC_API_KEY"),
+		AssistantModel:      env("ASSISTANT_MODEL", "claude-opus-5-5"),
 	}
 	if c.Region != "na" && c.Region != "eu" {
 		return nil, fmt.Errorf("TESLA_REGION must be na or eu, got %q", c.Region)

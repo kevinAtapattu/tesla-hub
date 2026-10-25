@@ -23,6 +23,7 @@ import (
 	"github.com/kevin/tesla-hub/internal/planner"
 	"github.com/kevin/tesla-hub/internal/poller"
 	"github.com/kevin/tesla-hub/internal/store"
+	"github.com/kevin/tesla-hub/internal/telemetry"
 	"github.com/kevin/tesla-hub/internal/tesla"
 	"github.com/kevin/tesla-hub/internal/weather"
 )
@@ -39,6 +40,8 @@ type Server struct {
 	Weather   *weather.Client
 	// RunScheduler asks the scheduler to check for due departures right away.
 	RunScheduler func()
+	// Telemetry is the live feed from the car; nil when TELEMETRY_HOST isn't set.
+	Telemetry *telemetry.Receiver
 	// Assistant answers messages like "warm it up, I'll be there in 15". Nil without an API key.
 	Assistant *assistant.Assistant
 
@@ -70,6 +73,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /assistant/try", s.assistantTry)
 	mux.HandleFunc("POST /assistant/token", s.newToken)
 	mux.HandleFunc("POST /settings/prefs", s.savePrefs)
+	mux.HandleFunc("POST /telemetry/configure", s.configureTelemetry)
+	mux.HandleFunc("POST /telemetry/check", s.checkTelemetry)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("ok")) })
 	return s.basicAuth(mux)
 }
@@ -133,6 +138,12 @@ type pageData struct {
 	AssistantToken string
 	AssistantLog   []store.AssistantEntry
 
+	TelemetryOn     bool
+	TelemetryHost   string
+	TelemetryPort   int
+	TelemetryStatus telemetry.Status
+	TelemetryNote   string // result of the last configure/check, shown in the card
+
 	// DrivingEvery is the poll interval while driving, shown so the speed chart isn't mistaken for live data.
 	DrivingEvery string
 }
@@ -160,6 +171,9 @@ func (s *Server) data(ctx context.Context, rangeParam string) pageData {
 	d.AssistantURL = s.Cfg.PublicBaseURL + "/assistant"
 	d.AssistantToken, _ = s.AssistantToken(ctx)
 	d.AssistantLog, _ = s.Store.RecentAssistant(ctx, 8)
+	if s.Telemetry != nil {
+		d.TelemetryOn, d.TelemetryHost, d.TelemetryPort, d.TelemetryStatus = true, s.Cfg.TelemetryHost, s.Cfg.TelemetryPort, s.Telemetry.Status()
+	}
 
 	if d.Latest != nil && d.Latest.Latitude != nil && d.Latest.Longitude != nil && s.Weather != nil {
 		var err error
@@ -211,7 +225,7 @@ func (s *Server) data(ctx context.Context, rangeParam string) pageData {
 
 // estimateCost uses Tesla's published per-request prices; check developer.tesla.com for current rates.
 func estimateCost(u map[string]int) float64 {
-	return float64(u["data"])*0.002 + float64(u["command"])*0.001 + float64(u["wake"])*0.02
+	return float64(u["data"])*0.002 + float64(u["command"])*0.001 + float64(u["wake"])*0.02 + float64(u["signal"])/150000
 }
 
 // plan works out what "I'm leaving at departAt" should do. Outside temperature comes
@@ -683,10 +697,14 @@ func rollingNumber(key string, v any, digits int) template.HTML {
 	return template.HTML(fmt.Sprintf(`<span class="num" data-nf data-key="%s">%s</span>`, template.HTMLEscapeString(key), n))
 }
 
+// usageTotal counts billable requests. Streamed telemetry signals are priced
+// separately (150,000 per $1) and don't count toward the polling budget.
 func usageTotal(u map[string]int) int {
 	n := 0
-	for _, v := range u {
-		n += v
+	for k, v := range u {
+		if k != "signal" {
+			n += v
+		}
 	}
 	return n
 }

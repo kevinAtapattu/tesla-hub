@@ -109,3 +109,37 @@ CREATE TABLE IF NOT EXISTS assistant_log (
     reply    text NOT NULL DEFAULT '',
     error    text NOT NULL DEFAULT ''
 );
+
+-- Fleet Telemetry: one row per record streamed by the car (about every second
+-- while driving). Records only carry fields that changed, so most columns are
+-- null; data keeps every field exactly as received, in metric where converted.
+CREATE TABLE IF NOT EXISTS telemetry (
+    time            timestamptz NOT NULL,
+    vin             text NOT NULL,
+    resend          boolean NOT NULL DEFAULT false,
+    speed_kmh       double precision,
+    latitude        double precision,
+    longitude       double precision,
+    heading         double precision,
+    gear            text,
+    soc             double precision,
+    odometer_km     double precision,
+    power_kw        double precision,
+    lat_accel_ms2   double precision,
+    long_accel_ms2  double precision,
+    pedal           double precision,
+    range_km        double precision,
+    inside_temp_c   double precision,
+    outside_temp_c  double precision,
+    data            jsonb NOT NULL
+);
+CREATE INDEX IF NOT EXISTS telemetry_vin_time ON telemetry (vin, time);
+
+-- Connectivity changes, errors and alerts the car reports over telemetry.
+CREATE TABLE IF NOT EXISTS telemetry_events (
+    time  timestamptz NOT NULL,
+    vin   text NOT NULL,
+    kind  text NOT NULL,
+    data  jsonb NOT NULL
+);
+CREATE INDEX IF NOT EXISTS telemetry_events_time ON telemetry_events (time DESC);

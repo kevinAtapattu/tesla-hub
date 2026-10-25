@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/kevin/tesla-hub/internal/telemetry"
 	"github.com/kevin/tesla-hub/internal/tesla"
 )
 
@@ -126,9 +127,14 @@ func (s *Store) RecordPresence(ctx context.Context, vin, state string) error {
 // --- API usage ---
 
 func (s *Store) CountRequest(ctx context.Context, kind string) error {
+	return s.CountRequests(ctx, kind, 1)
+}
+
+// CountRequests adds n billable units of kind (e.g. n streamed telemetry signals).
+func (s *Store) CountRequests(ctx context.Context, kind string, n int) error {
 	_, err := s.db.Exec(ctx, `
-		INSERT INTO api_requests (month, kind, count) VALUES (date_trunc('month', now())::date, $1, 1)
-		ON CONFLICT (month, kind) DO UPDATE SET count = api_requests.count + 1`, kind)
+		INSERT INTO api_requests (month, kind, count) VALUES (date_trunc('month', now())::date, $1, $2)
+		ON CONFLICT (month, kind) DO UPDATE SET count = api_requests.count + $2`, kind, n)
 	return err
 }
 
@@ -440,4 +446,29 @@ func (s *Store) RecentAssistant(ctx context.Context, limit int) ([]AssistantEntr
 		out = append(out, e)
 	}
 	return out, rows.Err()
+}
+
+// --- telemetry ---
+
+func (s *Store) InsertTelemetry(ctx context.Context, p *telemetry.Point) error {
+	data, err := json.Marshal(p.Data)
+	if err != nil {
+		return err
+	}
+	var gear *string
+	if p.Gear != "" {
+		gear = &p.Gear
+	}
+	_, err = s.db.Exec(ctx, `
+		INSERT INTO telemetry (time, vin, resend, speed_kmh, latitude, longitude, heading, gear, soc, odometer_km,
+			power_kw, lat_accel_ms2, long_accel_ms2, pedal, range_km, inside_temp_c, outside_temp_c, data)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
+		p.Time, p.VIN, p.Resend, p.SpeedKmh, p.Latitude, p.Longitude, p.Heading, gear, p.Soc, p.OdometerKm,
+		p.PowerKW, p.LatAccelMS2, p.LongAccelMS2, p.Pedal, p.RangeKm, p.InsideC, p.OutsideC, data)
+	return err
+}
+
+func (s *Store) InsertTelemetryEvent(ctx context.Context, vin, kind string, t time.Time, data json.RawMessage) error {
+	_, err := s.db.Exec(ctx, `INSERT INTO telemetry_events (time, vin, kind, data) VALUES ($1, $2, $3, $4)`, t, vin, kind, data)
+	return err
 }

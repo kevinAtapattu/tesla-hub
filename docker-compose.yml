@@ -25,14 +25,29 @@ services:
       DATABASE_URL: postgres://tesla:tesla@db:5432/tesla?sslmode=disable
       PRIVATE_KEY_PATH: /app/secrets/private-key.pem
       PUBLIC_KEY_PATH: /app/public-key-site/.well-known/appspecific/com.tesla.3p.public-key.pem
+      TELEMETRY_CERTS_DIR: /app/secrets/telemetry
     volumes:
       - ./secrets:/app/secrets:ro
       - ./public-key-site:/app/public-key-site:ro
     ports:
       - "127.0.0.1:8095:8095"
+      - "127.0.0.1:8096:8096" # public key only; Tailscale Funnel exposes this one
     depends_on:
       db:
         condition: service_healthy
+    restart: unless-stopped
+
+  # Tesla's Fleet Telemetry server. The car connects to it over the internet
+  # (Tailscale Funnel forwards public :8443 here) and it republishes decoded
+  # records to the hub over ZMQ on the internal network.
+  telemetry:
+    image: tesla/fleet-telemetry:v0.9.5
+    command: ["/fleet-telemetry", "-config=/etc/fleet-telemetry/config.json"]
+    volumes:
+      - ./telemetry/config.json:/etc/fleet-telemetry/config.json:ro
+      - ./secrets/telemetry:/etc/certs:ro
+    ports:
+      - "127.0.0.1:4443:443"
     restart: unless-stopped
 
   grafana:

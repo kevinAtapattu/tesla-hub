@@ -3,6 +3,7 @@
 //	hub            run the dashboard, poller and scheduler (default)
 //	hub keygen     create the key pair for signed commands
 //	hub register   register your domain with Tesla (one-time)
+//	hub telemetry-certs <host>   create the TLS certificates for the telemetry server
 package main
 
 import (
@@ -25,6 +26,7 @@ import (
 	"github.com/kevin/tesla-hub/internal/poller"
 	"github.com/kevin/tesla-hub/internal/rules"
 	"github.com/kevin/tesla-hub/internal/store"
+	"github.com/kevin/tesla-hub/internal/telemetry"
 	"github.com/kevin/tesla-hub/internal/tesla"
 	"github.com/kevin/tesla-hub/internal/weather"
 	"github.com/kevin/tesla-hub/internal/web"
@@ -49,8 +51,16 @@ func main() {
 		err = keygen(cfg)
 	case "register":
 		err = register(ctx, cfg)
+	case "telemetry-certs":
+		if len(os.Args) < 3 {
+			err = errors.New("usage: hub telemetry-certs <public hostname>")
+			break
+		}
+		if err = telemetry.GenerateCerts(cfg.TelemetryCertsDir, os.Args[2]); err == nil {
+			fmt.Println("wrote certificates to", cfg.TelemetryCertsDir)
+		}
 	default:
-		err = fmt.Errorf("unknown command %q (want serve, keygen or register)", cmd)
+		err = fmt.Errorf("unknown command %q (want serve, keygen, register or telemetry-certs)", cmd)
 	}
 	if err != nil {
 		fail(err)
@@ -87,8 +97,13 @@ func serve(ctx context.Context, cfg *config.Config) error {
 
 	go p.Run(ctx)
 	go sched.Run(ctx)
+	var feed *telemetry.Receiver
+	if cfg.TelemetryHost != "" {
+		feed = &telemetry.Receiver{Addr: cfg.TelemetryZMQ, Store: st}
+		go feed.Run(ctx)
+	}
 
-	dash := &web.Server{Cfg: cfg, Auth: auth, Store: st, Poller: p, Commander: commander, Weather: &weather.Client{}, RunScheduler: sched.Nudge}
+	dash := &web.Server{Cfg: cfg, Auth: auth, Store: st, Poller: p, Commander: commander, Weather: &weather.Client{}, RunScheduler: sched.Nudge, Telemetry: feed}
 	dash.Assistant = assistant.New(cfg.AnthropicAPIKey, cfg.AssistantModel, dash.AssistantActions(), cfg.Location)
 	if dash.Assistant == nil {
 		slog.Info("assistant off: set ANTHROPIC_API_KEY to enable it")
@@ -105,6 +120,17 @@ func serve(ctx context.Context, cfg *config.Config) error {
 		srv.Shutdown(shutdown)
 	}()
 
+	// The public listener serves only the app's public key, which Tesla fetches
+	// from https://<TESLA_DOMAIN>/.well-known/... It's what Tailscale Funnel exposes
+	// to the internet, so it must never route to the dashboard.
+	pub := &http.Server{Addr: cfg.PublicKeyListenAddr, Handler: publicKeyHandler(cfg.PublicKeyPath), ReadHeaderTimeout: 10 * time.Second}
+	go func() {
+		if err := pub.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
+			slog.Error("public key server", "err", err)
+		}
+	}()
+	go func() { <-ctx.Done(); pub.Close() }()
+
 	if missing := cfg.MissingTeslaApp(); len(missing) > 0 {
 		slog.Warn("Tesla app not configured yet", "missing", strings.Join(missing, ", "))
 	}
@@ -113,6 +139,20 @@ func serve(ctx context.Context, cfg *config.Config) error {
 		return err
 	}
 	return nil
+}
+
+func publicKeyHandler(path string) http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /.well-known/appspecific/com.tesla.3p.public-key.pem", func(w http.ResponseWriter, r *http.Request) {
+		key, err := os.ReadFile(path)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/x-pem-file")
+		w.Write(key)
+	})
+	return mux
 }
 
 func keygen(cfg *config.Config) error {

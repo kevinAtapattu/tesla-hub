@@ -21,6 +21,7 @@ func TestTemplatesRender(t *testing.T) {
 			Status: poller.Status{VIN: "V", Name: "Model 3", State: "online", LastCheck: time.Now()},
 			Latest: &tesla.Snapshot{Time: time.Now(), BatteryLevel: &n, RangeKm: &f, Latitude: &f, Longitude: &f, ClimateOn: &b, Locked: &b,
 				ChargingState: "Charging", ChargeLimit: &n, Heading: &n},
+			TelemetryOn: true, TelemetryHost: "car.example.ts.net", TelemetryPort: 8443, TelemetryNote: "Sent.",
 			Usage: map[string]int{"data": 12},
 			Rules: []*store.Rule{{ID: 1, Name: "Work", Enabled: true, Days: "1,2,3,4,5", AtTime: "07:30", TempC: 21, Latitude: &f, Longitude: &f, RadiusM: &f}},
 			Runs:  []store.RuleRun{{RuleName: "Work", RanAt: time.Now(), Status: "done"}},
@@ -34,7 +35,7 @@ func TestTemplatesRender(t *testing.T) {
 				t.Fatalf("data %d page %s: %v", i, page, err)
 			}
 		}
-		for _, name := range []string{"departures", "rules", "assistant-log"} {
+		for _, name := range []string{"departures", "rules", "assistant-log", "telemetry-card"} {
 			var sb strings.Builder
 			if err := tmpl.ExecuteTemplate(&sb, name, d); err != nil {
 				t.Fatalf("data %d partial %s: %v", i, name, err)

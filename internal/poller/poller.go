@@ -161,10 +161,13 @@ func (p *Poller) checkOnce(ctx context.Context) (time.Duration, error) {
 	}
 }
 
+// total counts billable requests; streamed telemetry signals are budgeted separately.
 func total(m map[string]int) int {
 	n := 0
-	for _, v := range m {
-		n += v
+	for k, v := range m {
+		if k != "signal" {
+			n += v
+		}
 	}
 	return n
 }

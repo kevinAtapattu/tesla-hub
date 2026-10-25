@@ -32,6 +32,8 @@
     </ol>
   </div>
 
+  {{template "telemetry-card" .}}
+
   <div class="card span2" id="assistant">
     <h2 class="card-title">Assistant
       {{if .AssistantOn}}<span class="pill green"><span class="dot green"></span>Ready</span>{{else}}<span class="pill amber">Needs an API key</span>{{end}}</h2>
@@ -112,6 +114,32 @@
     </div>
     {{end}}
   </div>
+  {{end}}
+</div>
+{{end}}
+
+{{define "telemetry-card"}}
+<div class="card span2" id="telemetry">
+  <h2 class="card-title">Live telemetry
+    {{if not .TelemetryOn}}<span class="pill">Off</span>
+    {{else if eq .TelemetryStatus.CarStatus "CONNECTED"}}<span class="pill green"><span class="dot green pulse"></span>Car streaming</span>
+    {{else if .TelemetryStatus.Connected}}<span class="pill"><span class="dot green"></span>Receiver ready</span>
+    {{else}}<span class="pill amber">Receiver not reachable</span>{{end}}</h2>
+  <p class="muted" style="margin:-4px 0 16px">While driving, the car streams speed, GPS, power and g-forces about once a second straight to this hub. That's what trip stats are built from.</p>
+  {{if .TelemetryOn}}
+  <div class="rows">
+    <div class="row"><span>Car connects to</span><span class="mono">{{.TelemetryHost}}:{{.TelemetryPort}}</span></div>
+    <div class="row"><span>Last car connection</span><span>{{if .TelemetryStatus.CarStatus}}{{.TelemetryStatus.CarStatus}} · {{ago .TelemetryStatus.CarStatusAt}}{{else}}not yet{{end}}</span></div>
+    <div class="row"><span>Last data</span><span>{{if .TelemetryStatus.Records}}{{ago .TelemetryStatus.LastRecord}} · {{.TelemetryStatus.Records}} records since the hub started{{else}}none yet{{end}}</span></div>
+    {{if .TelemetryStatus.LastError}}<div class="row"><span>Last error</span><span style="color:var(--red-ink)">{{.TelemetryStatus.LastError}}</span></div>{{end}}
+  </div>
+  {{if .TelemetryNote}}<div class="callout">{{.TelemetryNote}}</div>{{end}}
+  <div class="actions" style="margin-top:16px">
+    <button class="btn primary" hx-post="/telemetry/configure" hx-target="#telemetry" hx-swap="outerHTML" hx-disabled-elt="this">Send config to car</button>
+    <button class="btn" hx-post="/telemetry/check" hx-target="#telemetry" hx-swap="outerHTML" hx-disabled-elt="this">Check car status</button>
+  </div>
+  {{else}}
+  <div class="callout" style="margin:0">Set <code>TELEMETRY_HOST</code> in <code>.env</code> to the public name the car should connect to.</div>
   {{end}}
 </div>
 {{end}}
