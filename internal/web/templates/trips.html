@@ -2,7 +2,7 @@
 <div class="page-head">
   <div>
     <h1>Trips</h1>
-    <p>Every drive with its route and stats. <b>Live data</b> trips have a reading about every second; <b>Low detail</b> ones are from before live telemetry, with one every 2 minutes.</p>
+    <p>Every drive with its route and stats.</p>
   </div>
 </div>
 {{template "live-drive" .}}
@@ -21,7 +21,6 @@
       <div><b class="num">{{printf "%.0f" .AvgSpeedKmh}}<small>km/h</small></b><span>Avg speed</span></div>
       <div class="desktop-only"><b class="num">{{if .ZeroTo100}}{{secs .ZeroTo100}}{{else}}—{{end}}</b><span>0–100 km/h</span></div>
     </div>
-    {{if eq .Source "polling"}}<span class="pill trip-tag" title="Recorded before live telemetry was on: one reading every 2 minutes, so the route and stats are approximate">Low detail</span>{{else}}<span class="pill green trip-tag" title="Recorded from live telemetry, about one reading per second">Live data</span>{{end}}
   </a>
   {{end}}
 </div>
@@ -67,7 +66,7 @@
 <div class="page-head">
   <div>
     <h1>{{partOfDay .Start}}</h1>
-    <p>{{local .Start}} to {{clock .End}} · {{hms .Duration}}{{if eq .Source "polling"}} · low detail: recorded before live telemetry, one reading every 2 minutes{{end}}</p>
+    <p>{{local .Start}} to {{clock .End}} · {{hms .Duration}}</p>
   </div>
   <div class="actions"><a class="btn" href="/trips">All trips</a></div>
 </div>
