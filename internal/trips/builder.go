@@ -85,7 +85,12 @@ func (b *Builder) save(ctx context.Context, vin, source string, samples []Sample
 	segs := Segment(samples, gap)
 	for i, seg := range segs {
 		end := seg[len(seg)-1]
-		ongoing := i == len(segs)-1 && !closed && end.driving() && now.Sub(end.Time) < gap
+		// The newest drive may still be under way, or stopped briefly and about to go on.
+		wait := gap
+		if !end.driving() {
+			wait = MinStop
+		}
+		ongoing := i == len(segs)-1 && !closed && now.Sub(end.Time) < wait
 		if ongoing {
 			break
 		}

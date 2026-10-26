@@ -29,29 +29,45 @@ func (s Sample) driving() bool {
 	return s.Gear == "D" || s.Gear == "R" || s.Gear == "N" || (s.Gear == "" && s.SpeedKmh != nil && *s.SpeedKmh > 1)
 }
 
+// MinStop is how long the car must stay in Park for a drive to end. Shorter
+// stops (gas, a drive-thru, dropping someone off) stay part of the same trip.
+const MinStop = 5 * time.Minute
+
 // Segment splits samples (oldest first) into drives. A drive ends when the car
-// is put in Park or the data stops for longer than gap (it went to sleep or lost signal).
+// stays in Park for MinStop, or the data stops for longer than gap (it went to
+// sleep or lost signal). A drive's last sample is where it parked.
 func Segment(samples []Sample, gap time.Duration) [][]Sample {
 	var out [][]Sample
 	var cur []Sample
-	flush := func() {
+	parked := -1 // index in cur of the sample where the car last parked
+	end := func() {
+		if parked >= 0 {
+			cur = cur[:parked+1] // the trip ends where the car parked
+		}
 		if len(cur) >= 2 {
 			out = append(out, cur)
 		}
-		cur = nil
+		cur, parked = nil, -1
 	}
 	for _, s := range samples {
 		if len(cur) > 0 && s.Time.Sub(cur[len(cur)-1].Time) > gap {
-			flush()
+			end()
 		}
-		if s.driving() {
+		if parked >= 0 && s.Time.Sub(cur[parked].Time) >= MinStop {
+			end()
+		}
+		switch {
+		case s.driving():
 			cur = append(cur, s)
-		} else if len(cur) > 0 {
-			cur = append(cur, s) // include the stop so the trip ends where the car parked
-			flush()
+			parked = -1
+		case len(cur) > 0:
+			if parked < 0 {
+				parked = len(cur)
+			}
+			cur = append(cur, s)
 		}
 	}
-	flush()
+	end()
 	return out
 }
 

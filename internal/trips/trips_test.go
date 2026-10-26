@@ -93,3 +93,28 @@ func TestNoLaunchMeansNoZeroTo100(t *testing.T) {
 		t.Errorf("0–100 = %v, want none", *tr.ZeroTo100)
 	}
 }
+
+func TestShortStopStaysOneTrip(t *testing.T) {
+	start := time.Date(2026, 10, 25, 8, 0, 0, 0, time.UTC)
+	at := func(min float64) time.Time { return start.Add(time.Duration(min * float64(time.Minute))) }
+	s := []Sample{
+		{Time: at(0), Gear: "D", SpeedKmh: f(50)},
+		{Time: at(10), Gear: "D", SpeedKmh: f(50)},
+		{Time: at(11), Gear: "P", SpeedKmh: f(0)}, // gas station
+		{Time: at(13), Gear: "P", SpeedKmh: f(0)},
+		{Time: at(14), Gear: "D", SpeedKmh: f(40)},
+		{Time: at(20), Gear: "D", SpeedKmh: f(40)},
+		{Time: at(21), Gear: "P", SpeedKmh: f(0)}, // a friend's house
+		{Time: at(24), Gear: "", SpeedKmh: f(0)},
+		{Time: at(26), Gear: "P", SpeedKmh: f(0)},
+		{Time: at(60), Gear: "D", SpeedKmh: f(60)},
+		{Time: at(70), Gear: "P", SpeedKmh: f(0)},
+	}
+	segs := Segment(s, time.Hour) // samples are sparse here; only the stops should split
+	if len(segs) != 2 {
+		t.Fatalf("got %d trips, want 2", len(segs))
+	}
+	if end := segs[0][len(segs[0])-1].Time; !end.Equal(at(21)) {
+		t.Errorf("first trip ends at %v, want when it parked at the friend's house", end.Sub(start))
+	}
+}
