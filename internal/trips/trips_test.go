@@ -100,9 +100,9 @@ func TestShortStopStaysOneTrip(t *testing.T) {
 	s := []Sample{
 		{Time: at(0), Gear: "D", SpeedKmh: f(50)},
 		{Time: at(10), Gear: "D", SpeedKmh: f(50)},
-		{Time: at(11), Gear: "P", SpeedKmh: f(0)}, // gas station
-		{Time: at(13), Gear: "P", SpeedKmh: f(0)},
-		{Time: at(14), Gear: "D", SpeedKmh: f(40)},
+		{Time: at(11), Gear: "P", SpeedKmh: f(0)}, // letting someone out
+		{Time: at(11.5), Gear: "P", SpeedKmh: f(0)},
+		{Time: at(11.8), Gear: "D", SpeedKmh: f(40)},
 		{Time: at(20), Gear: "D", SpeedKmh: f(40)},
 		{Time: at(21), Gear: "P", SpeedKmh: f(0)}, // a friend's house
 		{Time: at(24), Gear: "", SpeedKmh: f(0)},

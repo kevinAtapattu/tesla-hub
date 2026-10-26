@@ -30,8 +30,8 @@ func (s Sample) driving() bool {
 }
 
 // MinStop is how long the car must stay in Park for a drive to end. Shorter
-// stops (gas, a drive-thru, dropping someone off) stay part of the same trip.
-const MinStop = 5 * time.Minute
+// stops (a red light in Park, letting someone out) stay part of the same trip.
+const MinStop = time.Minute
 
 // Segment splits samples (oldest first) into drives. A drive ends when the car
 // stays in Park for MinStop, or the data stops for longer than gap (it went to
