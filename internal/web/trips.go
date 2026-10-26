@@ -139,17 +139,66 @@ func frictionCircle(samples []trips.Sample) template.HTML {
 	return template.HTML(b.String())
 }
 
-// speedColor matches the trip map's legend.
+// speedStops is the route colour scale: green through city speeds, yellow and
+// orange into highway speeds, red from about 115 and darkening to 165+.
+var speedStops = []struct {
+	Kmh   float64
+	Color [3]int
+}{
+	{0, [3]int{0x22, 0xc5, 0x5e}},
+	{60, [3]int{0x22, 0xc5, 0x5e}},
+	{78, [3]int{0xea, 0xb3, 0x08}},
+	{98, [3]int{0xf9, 0x73, 0x16}},
+	{115, [3]int{0xef, 0x44, 0x44}},
+	{135, [3]int{0xdc, 0x26, 0x26}},
+	{150, [3]int{0xb9, 0x1c, 0x1c}},
+	{165, [3]int{0x6b, 0x10, 0x10}},
+}
+
+// speedColor blends between the stops so the colour changes smoothly with speed.
 func speedColor(kmh float64) string {
-	switch {
-	case kmh < 30:
-		return "#22c55e"
-	case kmh < 70:
-		return "#eab308"
-	case kmh < 105:
-		return "#f97316"
+	stops := speedStops
+	if kmh <= stops[0].Kmh {
+		return hexColor(stops[0].Color)
 	}
-	return "#ef4444"
+	for i := 1; i < len(stops); i++ {
+		a, b := stops[i-1], stops[i]
+		if kmh <= b.Kmh {
+			f := (kmh - a.Kmh) / (b.Kmh - a.Kmh)
+			var c [3]int
+			for j := range c {
+				c[j] = int(math.Round(float64(a.Color[j]) + f*float64(b.Color[j]-a.Color[j])))
+			}
+			return hexColor(c)
+		}
+	}
+	return hexColor(stops[len(stops)-1].Color)
+}
+
+func hexColor(c [3]int) string { return fmt.Sprintf("#%02x%02x%02x", c[0], c[1], c[2]) }
+
+// speedStopsJS gives the maps' scripts the same scale as [[km/h, [r,g,b]], ...].
+func speedStopsJS() template.JS {
+	var b strings.Builder
+	b.WriteString("[")
+	for i, s := range speedStops {
+		if i > 0 {
+			b.WriteString(",")
+		}
+		fmt.Fprintf(&b, "[%g,[%d,%d,%d]]", s.Kmh, s.Color[0], s.Color[1], s.Color[2])
+	}
+	b.WriteString("]")
+	return template.JS(b.String())
+}
+
+// speedGradient is the scale as a CSS gradient for the map legend.
+func speedGradient() template.CSS {
+	max := speedStops[len(speedStops)-1].Kmh
+	parts := make([]string, len(speedStops))
+	for i, s := range speedStops {
+		parts[i] = fmt.Sprintf("%s %.0f%%", hexColor(s.Color), s.Kmh/max*100)
+	}
+	return template.CSS("linear-gradient(90deg, " + strings.Join(parts, ", ") + ")")
 }
 
 // routeSVG draws a trip's route coloured by speed as a small preview, with no

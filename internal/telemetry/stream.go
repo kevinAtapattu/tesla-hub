@@ -233,7 +233,8 @@ func (r *Receiver) Decode(payload []byte) (*Point, error) {
 		volts, ok := r.packV[p.VIN]
 		r.mu.Unlock()
 		if ok {
-			p.PowerKW = ptr(volts * *current / 1000)
+			// The car reports discharge current as negative; PowerKW is positive when driving.
+			p.PowerKW = ptr(-volts * *current / 1000)
 		}
 	}
 	return p, nil

@@ -39,7 +39,7 @@ func TestDecodeConvertsToMetric(t *testing.T) {
 		datum(protos.Field_Odometer, &protos.Value{Value: &protos.Value_StringValue{StringValue: "1000"}}), // older string form
 		datum(protos.Field_Location, &protos.Value{Value: &protos.Value_LocationValue{LocationValue: &protos.LocationValue{Latitude: 43.69, Longitude: -79.85}}}),
 		datum(protos.Field_LongitudinalAcceleration, dbl(-4.9)),
-		datum(protos.Field_PackCurrent, dbl(150)), // amps, with the 400 V from the earlier record
+		datum(protos.Field_PackCurrent, dbl(-150)), // amps (negative = discharging), with the 400 V from the earlier record
 	}})
 	p, err := r.Decode(second)
 	if err != nil {

@@ -578,9 +578,11 @@ func funcs(loc *time.Location) template.FuncMap {
 			}
 			return t.In(loc).Format("3:04 PM")
 		},
-		"mod": func(a, b int) int { return a % b },
-		"nf":  rollingNumber,
-		"inc": func(i int) int { return i + 1 },
+		"mod":           func(a, b int) int { return a % b },
+		"nf":            rollingNumber,
+		"inc":           func(i int) int { return i + 1 },
+		"speedStops":    speedStopsJS,
+		"speedGradient": speedGradient,
 		"deref": func(p *float64) float64 {
 			if p == nil {
 				return 0
