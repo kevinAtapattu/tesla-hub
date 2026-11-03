@@ -35,6 +35,9 @@ func main() {
 		fresh := trips.Summarize(trips.Fill(samples), 0)
 		t.ZeroTo60, t.Rolling60to100, t.Rolling80to120 = fresh.ZeroTo60, fresh.Rolling60to100, fresh.Rolling80to120
 		t.MaxCombinedG = fresh.MaxCombinedG
+		if fresh.MaxSpeedKmh == t.MaxSpeedKmh {
+			t.TopSpeedAt = fresh.TopSpeedAt
+		}
 		if err := st.UpdateTripSummary(ctx, t.ID, t.Trip); err != nil {
 			log.Fatal(err)
 		}

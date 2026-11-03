@@ -78,9 +78,10 @@ type Trip struct {
 	Duration           time.Duration
 	Moving             time.Duration
 	MaxSpeedKmh        float64
-	AvgSpeedKmh        float64 // over moving time
-	EnergyKWh          float64 // drawn from the battery
-	RegenKWh           float64 // put back by regenerative braking
+	TopSpeedAt         time.Time // when MaxSpeedKmh was reached
+	AvgSpeedKmh        float64   // over moving time
+	EnergyKWh          float64   // drawn from the battery
+	RegenKWh           float64   // put back by regenerative braking
 	SocStart, SocEnd   *float64
 	PeakPowerKW        float64
 	PeakRegenKW        float64
@@ -139,8 +140,8 @@ func Summarize(seg []Sample, maxPath int) Trip {
 			}
 			t.EndLat, t.EndLon = s.Latitude, s.Longitude
 		}
-		if s.SpeedKmh != nil {
-			t.MaxSpeedKmh = math.Max(t.MaxSpeedKmh, *s.SpeedKmh)
+		if s.SpeedKmh != nil && *s.SpeedKmh > t.MaxSpeedKmh {
+			t.MaxSpeedKmh, t.TopSpeedAt = *s.SpeedKmh, s.Time
 		}
 		if s.PowerKW != nil {
 			t.PeakPowerKW = math.Max(t.PeakPowerKW, *s.PowerKW)

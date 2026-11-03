@@ -164,8 +164,9 @@ type pageData struct {
 	Live             *trips.Trip // drive under way
 	Race             RaceBoard
 	NowPlaying       *Track
-	TripTracks       []Track // what played during the trip
-	TopSpeedTrack    *Track  // what was on at the trip's top speed
+	TripTracks       []Track          // what played during the trip
+	TopSpeedTrack    *Track           // what was on at the trip's top speed
+	TripSongs        map[int64]*Track // trip list: the song at each trip's top speed
 
 	Drivers      []string
 	DriverFilter string // trips page: only this driver's trips

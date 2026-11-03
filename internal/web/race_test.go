@@ -27,3 +27,25 @@ func TestPlaylist(t *testing.T) {
 		t.Errorf("second track %+v", ts[1])
 	}
 }
+
+func TestTrackAt(t *testing.T) {
+	at := func(s int) time.Time { return time.Date(2026, 11, 3, 20, 0, s, 0, time.UTC) }
+	str := func(s string) *string { return &s }
+	ts := playlist([]store.MediaEvent{
+		{Time: at(0), Title: str("One")},
+		{Time: at(100), Title: str("Two")},
+		{Time: at(200), Title: str("")}, // turned off
+	})
+	for _, c := range []struct {
+		sec  int
+		want string
+	}{{50, "One"}, {150, "Two"}, {250, ""}} {
+		got := ""
+		if tr := trackAt(ts, at(c.sec)); tr != nil {
+			got = tr.Title
+		}
+		if got != c.want {
+			t.Errorf("at %ds: %q, want %q", c.sec, got, c.want)
+		}
+	}
+}

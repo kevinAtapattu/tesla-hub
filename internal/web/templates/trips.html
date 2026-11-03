@@ -62,7 +62,7 @@
 </div>
 
 <div class="grid g4" style="margin-bottom:16px">
-  <div class="card stat"><div class="label">Top speed</div><div class="value">{{nf "t-top" .MaxSpeedKmh 0}}<span class="unit">km/h</span></div><div class="hint">avg {{printf "%.0f" .AvgSpeedKmh}} km/h moving</div></div>
+  <div class="card stat"><div class="label">Top speed</div><div class="value">{{nf "t-top" .MaxSpeedKmh 0}}<span class="unit">km/h</span></div><div class="hint">{{with $.TopSpeedTrack}}♪ {{.Line}}{{else}}avg {{printf "%.0f" $.Trip.AvgSpeedKmh}} km/h moving{{end}}</div></div>
   <div class="card stat"><div class="label">Peak power</div><div class="value">{{nf "t-pwr" .PeakPowerKW 0}}<span class="unit">kW</span></div><div class="hint">{{printf "%.0f" .PeakRegenKW}} kW regen</div></div>
   <div class="card stat"><div class="label">Peak g</div><div class="value">{{if .MaxCombinedG}}{{printf "%.2f" .MaxCombinedG}}<span class="unit">g</span>{{else}}—{{end}}</div><div class="hint">brake {{printf "%.2f" .MaxBrakeG}} · corner {{printf "%.2f" .MaxLatG}}</div></div>
   <div class="card stat"><div class="label">Distance</div><div class="value">{{nf "t-dist" .DistanceKm 1}}<span class="unit">km</span></div><div class="hint">{{hms .Moving}} moving</div></div>
@@ -159,6 +159,7 @@
     <div class="trip-when">
       <div class="trip-title">{{partOfDay .Start}}{{if .Driver}} <span class="pill driver">{{.Driver}}</span>{{end}}</div>
       <div class="muted num">{{local .Start}} · {{hms .Duration}}</div>
+      {{with index $.TripSongs .ID}}<div class="top-song"><svg class="i" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg><span>{{.Line}}</span></div>{{end}}
     </div>
     <div class="trip-nums">
       <div><b class="num">{{printf "%.0f" .MaxSpeedKmh}}<small>km/h</small></b><span>Top speed</span></div>
