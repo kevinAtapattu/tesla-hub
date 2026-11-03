@@ -41,6 +41,14 @@ func TelemetryFields() map[string]TelemetryField {
 		"InsideTemp":               {IntervalSeconds: 60},
 		"OutsideTemp":              {IntervalSeconds: 120},
 		"DestinationName":          {IntervalSeconds: 1}, // for drive alerts: "started driving to Home"
+		// Now playing; sent only when the song changes. Elapsed time is left out
+		// because it changes every second and each value is billed.
+		"MediaNowPlayingTitle":   {IntervalSeconds: 2},
+		"MediaNowPlayingArtist":  {IntervalSeconds: 2},
+		"MediaNowPlayingAlbum":   {IntervalSeconds: 2},
+		"MediaNowPlayingStation": {IntervalSeconds: 2},
+		"MediaPlaybackStatus":    {IntervalSeconds: 2},
+		"MediaPlaybackSource":    {IntervalSeconds: 2},
 	}
 }
 

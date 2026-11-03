@@ -1,0 +1,76 @@
+{{define "race"}}
+<div class="page-head">
+  <div>
+    <h1>{{if .DriverFilter}}{{.DriverFilter}}'s bests{{else}}Personal bests{{end}}</h1>
+    <p>{{if .Race.Drives}}{{.Race.Drives}} drive{{if ne .Race.Drives 1}}s{{end}} · {{printf "%.0f" .Race.Km}} km{{else}}Your launches, top speeds and g-forces{{end}}</p>
+  </div>
+  {{if .Drivers}}
+  <span class="seg">
+    <a href="/" class="{{if not .DriverFilter}}on{{end}}">Everyone</a>
+    {{range .Drivers}}<a href="/?driver={{.}}" class="{{if eq . $.DriverFilter}}on{{end}}">{{.}}</a>{{end}}
+  </span>
+  {{end}}
+</div>
+
+{{template "live-drive" .}}
+{{if and .NowPlaying (not .Live)}}<div class="card" style="margin-bottom:16px">{{template "now-playing" .NowPlaying}}</div>{{end}}
+
+{{with .Race}}
+<div class="race-top">
+  {{with .Best0100}}
+  <a class="card hero launch" {{if .TripID}}href="/trips/{{.TripID}}"{{end}}>
+    <div class="hero-top">
+      <div><div class="name">0–100 km/h</div>
+        <div class="sub">{{if .TripID}}{{local .When}}{{with .Driver}} · {{.}}{{end}}{{else}}Floor it from a stop to set one{{end}}</div></div>
+      {{if .TripID}}<span class="pill pb">PB</span>{{end}}
+    </div>
+    <div class="hero-big timer">{{.Value}}{{if .TripID}}<span class="unit">s</span>{{end}}</div>
+    <div class="splits">
+      {{range $.Race.Runs}}<div><span>{{.Label}}</span><b class="timer">{{.Value}}{{if .TripID}}<small>s</small>{{end}}</b></div>{{end}}
+      <div><span>Launch</span><b class="timer">{{$.Race.LaunchG.Value}}{{if $.Race.LaunchG.TripID}}<small>g</small>{{end}}</b></div>
+    </div>
+  </a>
+  {{end}}
+  {{with .TopSpeed}}
+  <a class="card speedo" {{if .TripID}}href="/trips/{{.TripID}}"{{end}}>
+    <div class="speedo-dial">{{gauge .N 200}}
+      <div class="speedo-read"><b class="timer">{{.Value}}</b><span>km/h</span></div></div>
+    <div class="speedo-foot"><b>Top speed</b><span>{{if .TripID}}{{local .When}}{{with .Driver}} · {{.}}{{end}}{{else}}No drives yet{{end}}</span></div>
+  </a>
+  {{end}}
+</div>
+
+<div class="grid g4" style="margin-bottom:16px">
+  {{range .Tiles}}
+  <a class="card stat record" {{if .TripID}}href="/trips/{{.TripID}}"{{end}}>
+    <div class="label">{{.Label}}</div>
+    <div class="value timer">{{.Value}}{{if .TripID}}<span class="unit">{{.Unit}}</span>{{end}}</div>
+    <div class="hint">{{if .TripID}}{{ago .When}}{{with .Driver}} · {{.}}{{end}}{{else}}&nbsp;{{end}}</div>
+  </a>
+  {{end}}
+</div>
+
+{{if .Drivers}}
+<div class="card flush" style="margin-bottom:16px">
+  <h2 class="card-title">Leaderboard <span class="muted">fastest 0–100 first</span></h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>#</th><th>Driver</th><th>0–100</th><th>Top speed</th><th class="desktop-only">Peak g</th><th class="desktop-only">Drives</th></tr></thead>
+    <tbody>
+      {{range $i, $r := .Drivers}}
+      <tr><td class="pos">{{inc $i}}</td><td><a href="/?driver={{.Name}}"><b>{{.Name}}</b></a></td>
+        <td class="timer">{{if .Best0100}}{{printf "%.1f" .Best0100.Seconds}} s{{else}}—{{end}}</td>
+        <td class="timer">{{printf "%.0f" .TopSpeed}} km/h</td>
+        <td class="timer desktop-only">{{if .MaxG}}{{printf "%.2f" .MaxG}} g{{else}}—{{end}}</td>
+        <td class="num desktop-only">{{.Drives}} · {{printf "%.0f" .Km}} km</td></tr>
+      {{end}}
+    </tbody>
+  </table></div>
+</div>
+{{end}}
+{{end}}
+
+<div class="section-head"><h2>Recent drives</h2><a class="link" href="/trips{{with .DriverFilter}}?driver={{.}}{{end}}">See all
+  <svg class="i" viewBox="0 0 24 24" style="width:12px;height:12px"><path d="m9 18 6-6-6-6"/></svg></a></div>
+{{if .Trips}}{{template "trip-list" .}}
+{{else}}<div class="card"><div class="empty-note">No drives yet. Your next drive shows up here a few minutes after you park.</div></div>{{end}}
+{{end}}

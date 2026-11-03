@@ -25,6 +25,14 @@ func (s *Server) tripsPage(w http.ResponseWriter, r *http.Request) {
 	}
 	d.Drivers, _ = s.Store.Drivers(r.Context())
 	d.TripTotals = totals(d.Trips)
+	s.previews(&d)
+	d.Live = s.liveTrip(r)
+	d.NowPlaying = s.nowPlaying(r.Context())
+	s.render(w, "index.html", d)
+}
+
+// previews makes the route previews for the trip list.
+func (s *Server) previews(d *pageData) {
 	d.TripPreviews = map[int64]template.HTML{}
 	d.TripPreviewPaths = map[int64]string{}
 	for i := range d.Trips {
@@ -35,8 +43,6 @@ func (s *Server) tripsPage(w http.ResponseWriter, r *http.Request) {
 		}
 		t.Path = nil // the page only needs the previews
 	}
-	d.Live = s.liveTrip(r)
-	s.render(w, "index.html", d)
 }
 
 func (s *Server) tripPage(w http.ResponseWriter, r *http.Request) {
@@ -65,13 +71,14 @@ func (s *Server) tripPage(w http.ResponseWriter, r *http.Request) {
 		d.TripPower = buildChart(pts, t.Start, t.End, s.Cfg.Location, "", nil, nil,
 			series{Name: "Power kW", Class: "s-inside", Value: func(p store.Point) *float64 { return p.PowerKW }})
 		d.TripG = frictionCircle(filled)
+		d.TripTracks, d.TopSpeedTrack = s.soundtrack(r.Context(), t, filled)
 	}
 	s.render(w, "index.html", d)
 }
 
 // livePartial is polled every few seconds by the dashboard while a drive is under way.
 func (s *Server) livePartial(w http.ResponseWriter, r *http.Request) {
-	s.render(w, "live-drive", pageData{Live: s.liveTrip(r)})
+	s.render(w, "live-drive", pageData{Live: s.liveTrip(r), NowPlaying: s.nowPlaying(r.Context())})
 }
 
 func (s *Server) liveTrip(r *http.Request) *trips.Trip {

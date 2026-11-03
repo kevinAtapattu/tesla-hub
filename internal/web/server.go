@@ -58,7 +58,8 @@ func (s *Server) Handler() http.Handler {
 	s.tmpl = template.Must(template.New("").Funcs(funcs(s.Cfg.Location)).ParseFS(templateFS, "templates/*.html"))
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /{$}", s.page("dashboard"))
+	mux.HandleFunc("GET /{$}", s.racePage)
+	mux.HandleFunc("GET /car", s.page("dashboard"))
 	mux.HandleFunc("GET /controls", s.page("controls"))
 	mux.HandleFunc("GET /schedules", s.page("schedules"))
 	mux.HandleFunc("GET /settings", s.page("settings"))
@@ -161,6 +162,10 @@ type pageData struct {
 	TripPower        chart
 	TripG            template.HTML
 	Live             *trips.Trip // drive under way
+	Race             RaceBoard
+	NowPlaying       *Track
+	TripTracks       []Track // what played during the trip
+	TopSpeedTrack    *Track  // what was on at the trip's top speed
 
 	Drivers      []string
 	DriverFilter string // trips page: only this driver's trips
@@ -331,6 +336,9 @@ func (s *Server) page(name string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		d := s.data(r.Context(), r.URL.Query().Get("range"))
 		d.Page = name
+		if name == "dashboard" {
+			d.NowPlaying = s.nowPlaying(r.Context())
+		}
 		d.AssistantURL = requestBase(r) + "/assistant"
 		d.DriverURL = requestBase(r) + "/driver"
 		d.Drivers, _ = s.Store.Drivers(r.Context())
@@ -580,6 +588,7 @@ func funcs(loc *time.Location) template.FuncMap {
 		},
 		"mod":           func(a, b int) int { return a % b },
 		"nf":            rollingNumber,
+		"gauge":         gauge,
 		"inc":           func(i int) int { return i + 1 },
 		"speedStops":    speedStopsJS,
 		"speedGradient": speedGradient,

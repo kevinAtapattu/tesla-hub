@@ -87,7 +87,11 @@ type Trip struct {
 	MaxLatG            float64
 	MaxAccelG          float64
 	MaxBrakeG          float64
+	MaxCombinedG       float64        // braking or accelerating while cornering, √(lat² + long²)
+	ZeroTo60           *time.Duration // fastest standing 0–60 km/h, if there was one
 	ZeroTo100          *time.Duration // fastest 0–100 km/h run, if there was one
+	Rolling60to100     *time.Duration // fastest 60–100 km/h without stopping, e.g. a highway merge
+	Rolling80to120     *time.Duration // fastest 80–120 km/h, e.g. passing
 	StartLat, StartLon *float64
 	EndLat, EndLon     *float64
 	Path               []PathPoint
@@ -149,6 +153,9 @@ func Summarize(seg []Sample, maxPath int) Trip {
 			t.MaxAccelG = math.Max(t.MaxAccelG, *s.LongAccel/gravity)
 			t.MaxBrakeG = math.Max(t.MaxBrakeG, -*s.LongAccel/gravity)
 		}
+		if s.LatAccel != nil && s.LongAccel != nil {
+			t.MaxCombinedG = math.Max(t.MaxCombinedG, math.Hypot(*s.LatAccel, *s.LongAccel)/gravity)
+		}
 		if i == 0 {
 			continue
 		}
@@ -180,43 +187,65 @@ func Summarize(seg []Sample, maxPath int) Trip {
 	if t.Moving > 0 {
 		t.AvgSpeedKmh = t.DistanceKm / t.Moving.Hours()
 	}
-	t.ZeroTo100 = bestRun(seg, 100)
+	t.ZeroTo60 = bestRun(seg, 0, 60)
+	t.ZeroTo100 = bestRun(seg, 0, 100)
+	t.Rolling60to100 = bestRun(seg, 60, 100)
+	t.Rolling80to120 = bestRun(seg, 80, 120)
 	t.Path = path(seg, maxPath)
 	return t
 }
 
-// bestRun finds the quickest standing start to target km/h: from the last time
-// the car was (almost) stopped to the first sample at or above target, with the
-// crossing interpolated between samples. Runs over 20 s aren't launches.
-func bestRun(seg []Sample, target float64) *time.Duration {
+// bestRun finds the quickest run from one speed to another, with both crossings
+// interpolated between samples. From 0 it's a standing start, timed from the
+// last sample where the car was (almost) stopped. The speed must not drop back
+// to from on the way, and runs over 20 s aren't flat-out.
+func bestRun(seg []Sample, from, to float64) *time.Duration {
+	floor := from
+	if from == 0 {
+		floor = 2 // creeping counts as stopped
+	}
 	var best *time.Duration
-	var standing *time.Time
-	for i, s := range seg {
+	var start *time.Time
+	var prev *Sample // the last sample with a speed
+	for i := range seg {
+		s := &seg[i]
 		if s.SpeedKmh == nil {
 			continue
 		}
 		v := *s.SpeedKmh
-		if v <= 2 {
+		switch {
+		case v <= floor:
 			t := s.Time
-			standing = &t
-			continue
+			start = &t
+		case start != nil && prev != nil && *prev.SpeedKmh <= floor && from > 0:
+			// moved off the floor: the run starts where it crossed from
+			t := cross(*prev, *s, from)
+			start = &t
 		}
-		if standing == nil || v < target {
-			continue
+		if start != nil && v >= to && v > floor {
+			end := s.Time
+			if prev != nil && *prev.SpeedKmh < to {
+				end = cross(*prev, *s, to)
+			}
+			d := end.Sub(*start)
+			if d > 0 && d <= 20*time.Second && (best == nil || d < *best) {
+				best = &d
+			}
+			start = nil
 		}
-		crossed := s.Time
-		if i > 0 && seg[i-1].SpeedKmh != nil && *seg[i-1].SpeedKmh < target {
-			pv, pt := *seg[i-1].SpeedKmh, seg[i-1].Time
-			frac := (target - pv) / (v - pv)
-			crossed = pt.Add(time.Duration(frac * float64(s.Time.Sub(pt))))
-		}
-		d := crossed.Sub(*standing)
-		if d > 0 && d <= 20*time.Second && (best == nil || d < *best) {
-			best = &d
-		}
-		standing = nil
+		prev = s
 	}
 	return best
+}
+
+// cross is when the speed passed v between samples a and b.
+func cross(a, b Sample, v float64) time.Time {
+	av, bv := *a.SpeedKmh, *b.SpeedKmh
+	if bv == av {
+		return b.Time
+	}
+	f := math.Max(0, math.Min(1, (v-av)/(bv-av)))
+	return a.Time.Add(time.Duration(f * float64(b.Time.Sub(a.Time))))
 }
 
 // path keeps at most max points, evenly spread, always including both ends.

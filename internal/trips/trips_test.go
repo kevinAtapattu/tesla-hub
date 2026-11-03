@@ -118,3 +118,35 @@ func TestShortStopStaysOneTrip(t *testing.T) {
 		t.Errorf("first trip ends at %v, want when it parked at the friend's house", end.Sub(start))
 	}
 }
+
+func TestRollingRuns(t *testing.T) {
+	start := time.Date(2026, 10, 25, 8, 0, 0, 0, time.UTC)
+	at := func(sec float64) time.Time { return start.Add(time.Duration(sec * float64(time.Second))) }
+	// Cruising at 50, then 50 → 130 at 10 km/h per second from t=10 s.
+	var s []Sample
+	for i := 0; i <= 10; i++ {
+		s = append(s, Sample{Time: at(float64(i)), Gear: "D", SpeedKmh: f(50)})
+	}
+	for i := 1; i <= 8; i++ {
+		s = append(s, Sample{Time: at(float64(10 + i)), Gear: "D", SpeedKmh: f(50 + float64(i)*10)})
+	}
+	tr := Summarize(s, 10)
+	for name, got := range map[string]*time.Duration{"60–100": tr.Rolling60to100, "80–120": tr.Rolling80to120} {
+		if got == nil || math.Abs(got.Seconds()-4) > 0.01 {
+			t.Errorf("%s = %v, want 4s", name, got)
+		}
+	}
+	if tr.ZeroTo60 != nil || tr.ZeroTo100 != nil {
+		t.Errorf("no standing start, got 0–60 %v 0–100 %v", tr.ZeroTo60, tr.ZeroTo100)
+	}
+
+	// Lifting off at 90 and dropping back below 60 restarts the run.
+	s = []Sample{
+		{Time: at(0), Gear: "D", SpeedKmh: f(55)}, {Time: at(2), Gear: "D", SpeedKmh: f(90)},
+		{Time: at(4), Gear: "D", SpeedKmh: f(55)}, {Time: at(5), Gear: "D", SpeedKmh: f(65)}, {Time: at(7), Gear: "D", SpeedKmh: f(105)},
+	}
+	// 60 is crossed at 4.5 s, 100 at 6.75 s.
+	if r := Summarize(s, 10).Rolling60to100; r == nil || math.Abs(r.Seconds()-2.25) > 0.01 {
+		t.Errorf("60–100 after lifting = %v, want 2.25s", r)
+	}
+}

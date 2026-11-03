@@ -609,6 +609,79 @@ func (s *Store) ListTrips(ctx context.Context, vin, driver string, limit int) ([
 	return out, rows.Err()
 }
 
+// TripStats returns every trip's stats without its route, oldest first, for
+// all-time records.
+func (s *Store) TripStats(ctx context.Context, vin string) ([]SavedTrip, error) {
+	rows, err := s.db.Query(ctx, `
+		SELECT id, source, coalesce(driver, ''), summary - 'Path' FROM trips
+		WHERE vin = $1 ORDER BY start_at`, vin)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []SavedTrip
+	for rows.Next() {
+		var t SavedTrip
+		var raw []byte
+		if err := rows.Scan(&t.ID, &t.Source, &t.Driver, &raw); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(raw, &t.Trip); err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
+// UpdateTripSummary replaces a trip's stats, keeping its ID and driver.
+func (s *Store) UpdateTripSummary(ctx context.Context, id int64, t trips.Trip) error {
+	summary, err := json.Marshal(t)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.Exec(ctx, `UPDATE trips SET summary = $2, distance_km = $3 WHERE id = $1`, id, summary, t.DistanceKm)
+	return err
+}
+
+// mediaCol reads a field as NULL when the record doesn't have it and '' when the car cleared it.
+func mediaCol(k string) string {
+	return "CASE WHEN data ? '" + k + "' THEN coalesce(data->>'" + k + "', '') END"
+}
+
+// MediaEvent is one telemetry record's media fields: nil when not in the
+// record, "" when the car cleared the value.
+type MediaEvent struct {
+	Time                    time.Time
+	Title, Artist, Album    *string
+	Station, Status, Source *string
+}
+
+// MediaEvents returns the media changes the car streamed in a time range, oldest first.
+func (s *Store) MediaEvents(ctx context.Context, vin string, from, to time.Time) ([]MediaEvent, error) {
+	rows, err := s.db.Query(ctx, `
+		SELECT time, `+mediaCol("MediaNowPlayingTitle")+`, `+mediaCol("MediaNowPlayingArtist")+`, `+mediaCol("MediaNowPlayingAlbum")+`,
+		       `+mediaCol("MediaNowPlayingStation")+`, `+mediaCol("MediaPlaybackStatus")+`, `+mediaCol("MediaPlaybackSource")+`
+		FROM telemetry
+		WHERE vin = $1 AND time BETWEEN $2 AND $3 AND NOT resend
+		  AND data ?| array['MediaNowPlayingTitle','MediaNowPlayingArtist','MediaNowPlayingAlbum',
+		                    'MediaNowPlayingStation','MediaPlaybackStatus','MediaPlaybackSource']
+		ORDER BY time`, vin, from, to)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []MediaEvent
+	for rows.Next() {
+		var e MediaEvent
+		if err := rows.Scan(&e.Time, &e.Title, &e.Artist, &e.Album, &e.Station, &e.Status, &e.Source); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
 // GetTrip returns one trip with its route, or nil if it doesn't exist.
 func (s *Store) GetTrip(ctx context.Context, id int64) (*SavedTrip, error) {
 	t := &SavedTrip{ID: id}
