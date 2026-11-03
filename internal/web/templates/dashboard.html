@@ -7,7 +7,7 @@
       <p>{{if .Status.Name}}{{.Status.Name}}{{else}}Your Tesla{{end}}{{with .Latest}} · Updated <span title="{{local .Time}}">{{ago .Time}}</span>{{end}}</p>
     </div>
     <div class="actions">
-      {{template "car-status" .}}
+      {{if not .Latest}}{{template "car-status" .}}{{end}}
       <button class="btn primary" hx-post="/refresh" hx-target="#toast">
         <svg class="i ico" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"/><path d="M21 3v5h-5"/></svg>
         <svg class="i spin" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.22-8.56"/></svg>
@@ -33,19 +33,32 @@
     </ol>
   </div>
   {{else}}{{with .Latest}}
+  <div class="card hero">
+    <div class="hero-top">
+      <div><div class="name">{{if $.Status.Name}}{{$.Status.Name}}{{else}}Tesla{{end}}</div>
+        <div class="sub">Battery{{if .ChargeLimit}} · limit {{int .ChargeLimit}}%{{end}}</div></div>
+      {{template "car-status" $}}
+    </div>
+    <div class="hero-big">{{nf "s-batt" .BatteryLevel 0}}<span class="unit">%</span></div>
+    <div class="bar {{if .Charging}}charging{{else if le (pct .BatteryLevel) 20}}low{{end}}">
+      <i style="width:{{pct .BatteryLevel}}%"></i>{{if .ChargeLimit}}<b style="left:{{pct .ChargeLimit}}%" title="Charge limit {{int .ChargeLimit}}%"></b>{{end}}</div>
+    <div class="hero-foot"><span><b>{{nf "s-range" .RangeKm 0}} km</b> range</span>
+      <span>{{if yes .Locked}}Locked{{else}}Unlocked{{end}} · {{num .OdometerKm 0}} km</span></div>
+  </div>
+
   <div class="grid g4" style="margin-bottom:16px">
-    <div class="card stat"><div class="label">Battery</div>
-      <div class="value">{{nf "s-batt" .BatteryLevel 0}}<span class="unit">%</span></div>
-      <div class="hint">{{if .ChargeLimit}}Charge limit {{int .ChargeLimit}}%{{else}}&nbsp;{{end}}</div></div>
-    <div class="card stat"><div class="label">Range</div>
-      <div class="value">{{nf "s-range" .RangeKm 0}}<span class="unit">km</span></div>
-      <div class="hint">Estimated</div></div>
-    <div class="card stat"><div class="label">Cabin</div>
+    <div class="card stat"><div class="label"><svg class="i" viewBox="0 0 24 24"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg>Cabin</div>
       <div class="value">{{nf "s-cabin" .InsideTempC 1}}<span class="unit">°C</span></div>
       <div class="hint">{{if yes .ClimateOn}}Climate on · set {{num .DriverTempSetting 0}}°{{else}}Climate off{{end}}</div></div>
-    <div class="card stat"><div class="label">Outside</div>
+    <div class="card stat"><div class="label"><svg class="i" viewBox="0 0 24 24"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9z"/></svg>Outside</div>
       <div class="value">{{if $.Weather}}{{nf "s-out" $.Weather.TempC 0}}{{else}}{{nf "s-out" .OutsideTempC 0}}{{end}}<span class="unit">°C</span></div>
       <div class="hint">{{if $.Weather}}{{$.Weather.Summary}}{{else}}Car sensor{{end}}</div></div>
+    <div class="card stat"><div class="label"><svg class="i" viewBox="0 0 24 24"><circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M8 19h8.5a3.5 3.5 0 0 0 0-7h-9a3.5 3.5 0 0 1 0-7H16"/></svg>Today</div>
+      <div class="value">{{nf "s-today" $.TodayKm 1}}<span class="unit">km</span></div>
+      <div class="hint">Driven since midnight</div></div>
+    <div class="card stat"><div class="label"><svg class="i" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>Sentry</div>
+      <div class="value">{{if yes .Sentry}}On{{else}}Off{{end}}</div>
+      <div class="hint">{{if yes .Locked}}Doors locked{{else}}Doors unlocked{{end}}</div></div>
   </div>
 
   <div class="grid g2">
