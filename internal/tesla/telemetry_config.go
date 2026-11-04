@@ -41,6 +41,14 @@ func TelemetryFields() map[string]TelemetryField {
 		"InsideTemp":               {IntervalSeconds: 60},
 		"OutsideTemp":              {IntervalSeconds: 120},
 		"DestinationName":          {IntervalSeconds: 1}, // for drive alerts: "started driving to Home"
+		// Navigation, for comparing the car's ETA with the actual drive time.
+		// Minutes and miles tick down as you drive, so they're sent every 30 s.
+		"DestinationLocation":      {IntervalSeconds: 5},
+		"OriginLocation":           {IntervalSeconds: 5},
+		"MinutesToArrival":         {IntervalSeconds: 30},
+		"MilesToArrival":           {IntervalSeconds: 30},
+		"RouteTrafficMinutesDelay": {IntervalSeconds: 60},
+		"RouteLastUpdated":         {IntervalSeconds: 5}, // changes on a reroute
 		// Now playing; sent only when the song changes. Elapsed time is left out
 		// because it changes every second and each value is billed.
 		"MediaNowPlayingTitle":   {IntervalSeconds: 2},

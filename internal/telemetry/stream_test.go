@@ -66,3 +66,20 @@ func TestDecodeConvertsToMetric(t *testing.T) {
 		t.Errorf("gear = %q, want D", g.Gear)
 	}
 }
+
+func TestDecodeDestination(t *testing.T) {
+	r := &Receiver{}
+	payload, _ := protojson.Marshal(&protos.Payload{Vin: "V", Data: []*protos.Datum{
+		datum(protos.Field_DestinationLocation, &protos.Value{Value: &protos.Value_LocationValue{LocationValue: &protos.LocationValue{Latitude: 43.65, Longitude: -79.38}}}),
+	}})
+	p, err := r.Decode(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Latitude != nil {
+		t.Error("destination must not move the car")
+	}
+	if d, ok := p.Data["DestinationLocation"].(map[string]float64); !ok || d["lat"] != 43.65 {
+		t.Errorf("destination %v", p.Data["DestinationLocation"])
+	}
+}

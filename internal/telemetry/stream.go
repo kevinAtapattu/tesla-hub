@@ -182,6 +182,11 @@ func (r *Receiver) Decode(payload []byte) (*Point, error) {
 				p.Data[name] = map[string]float64{"lat": lat, "lon": lon}
 			}
 			continue
+		case protos.Field_DestinationLocation, protos.Field_OriginLocation:
+			if loc := v.GetLocationValue(); loc != nil {
+				p.Data[name] = map[string]float64{"lat": loc.GetLatitude(), "lon": loc.GetLongitude()}
+			}
+			continue
 		case protos.Field_Gear:
 			p.Gear = strings.TrimPrefix(v.GetShiftStateValue().String(), "ShiftState")
 			if p.Gear == "Unknown" || p.Gear == "Invalid" || p.Gear == "SNA" {
