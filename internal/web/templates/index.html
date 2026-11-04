@@ -157,13 +157,15 @@
   .top-song.center { justify-content: center; }
   .art { position: relative; overflow: hidden; }
   .art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-  .song-at { display: grid; grid-template-columns: 96px 1fr; gap: 6px 16px; align-items: center; }
-  .song-at .art { width: 96px; height: 96px; border-radius: 14px; grid-row: span 2; box-shadow: 0 12px 30px -10px rgba(0,0,0,.6); }
-  .song-at .art svg.i { width: 32px; height: 32px; }
-  .song-at p { margin: 0; font-size: 17px; line-height: 1.4; color: var(--muted); text-wrap: balance; }
+  .song-at { display: grid; grid-template-columns: 56px 1fr; gap: 12px; align-items: center; margin-top: 6px; }
+  .song-at .art { width: 56px; height: 56px; border-radius: 10px; box-shadow: 0 10px 24px -10px rgba(0,0,0,.6); }
+  .song-at .art svg.i { width: 22px; height: 22px; }
+  .song-at p { margin: 0; font-size: 14px; line-height: 1.4; color: var(--muted); text-wrap: balance; }
   .song-at p b { color: var(--text); font-weight: 600; }
-  .song-at .speed { color: var(--soft); white-space: nowrap; }
-  .song-at > span { font-size: 12px; align-self: start; }
+  .spec .song-at .speed { color: var(--soft); white-space: nowrap; font: 600 15px "Geist Mono", monospace; display: inline; }
+  .spec .song-at .speed small { margin-left: 2px; }
+  .song-at .via { display: block; font-size: 11px; color: var(--faint); }
+  .song-none { margin: 4px 0 0; font-size: 13px; color: var(--faint); }
   .section-head { display: flex; justify-content: space-between; align-items: center; margin: 28px 0 12px; }
   .section-head h2 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -.02em; }
   td.pos { color: var(--muted); width: 1%; font-family: "Geist Mono", monospace; }
@@ -226,7 +228,7 @@
   .spec > span { font-size: 10.5px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
   .spec b { font-family: "Geist Mono", monospace; font-size: 20px; font-weight: 500; color: var(--soft); letter-spacing: -.03em; display: flex; align-items: baseline; gap: 3px; }
   .spec small, .sectors small, .rk-val small, .fr-num small { font: 500 11px "Geist", sans-serif; color: var(--muted); letter-spacing: 0; margin-left: 2px; }
-  .spec.wide { grid-column: 1 / -1; } .spec.song b { font: 500 14px "Geist", sans-serif; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+  .spec.wide { grid-column: 1 / -1; } .spec .song-at p b { font: 600 14px "Geist", sans-serif; color: var(--text); letter-spacing: 0; display: inline; }
   .sectors { margin-top: 20px; border-top: 1px solid var(--line); }
   .sec-row { display: grid; grid-template-columns: 1fr 1.2fr 1fr 1fr; align-items: center; gap: 8px; padding: 10px 4px; border-bottom: 1px solid var(--line); font-size: 15px; transition: background .15s; border-radius: 8px; }
   .sec-row:last-child { border-bottom: 0; }

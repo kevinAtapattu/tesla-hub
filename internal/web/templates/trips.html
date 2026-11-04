@@ -93,6 +93,13 @@
       <div class="spec"><span>Duration</span><b>{{hms .Duration}}</b></div>
       <div class="spec"><span>Top speed</span><b>{{nf "c-top" .MaxSpeedKmh 0}}<small>km/h</small></b></div>
       <div class="spec"><span>Average</span><b>{{nf "c-avg" .AvgSpeedKmh 0}}<small>km/h</small></b></div>
+      <div class="spec wide song"><span>Top-speed song</span>
+        {{with $.TopSpeedTrack}}
+        <div class="song-at">{{template "art" .}}
+          <p>Was listening to <b>{{if .Title}}{{.Title}}{{else}}{{.Station}}{{end}}</b>{{with .Artist}} by {{.}}{{end}} at <b class="speed timer">{{printf "%.0f" $.Trip.MaxSpeedKmh}}<small>km/h</small></b>{{with .Source}} <span class="via">via {{.}}</span>{{end}}</p>
+        </div>
+        {{else}}<p class="song-none">{{if $.TripTracks}}Nothing was playing at top speed{{else}}Shows up for drives once now-playing is on{{end}}</p>{{end}}
+      </div>
     </div>
   </div>
   {{if and $.Board.Sectors (index $.Board.Sectors 0).Time}}
@@ -136,16 +143,7 @@
 </div>
 {{end}}
 
-<div class="grid g2" style="margin-bottom:16px">
-  <div class="card song-card">
-    <h2 class="bracket-title">Top-speed song</h2>
-    {{with $.TopSpeedTrack}}
-    <div class="song-at">{{template "art" .}}
-      <p>Was listening to <b>{{if .Title}}{{.Title}}{{else}}{{.Station}}{{end}}</b>{{with .Artist}} by {{.}}{{end}} at <b class="speed timer">{{printf "%.0f" $.Trip.MaxSpeedKmh}}<small>km/h</small></b></p>
-      {{with .Source}}<span class="muted">via {{.}}</span>{{end}}
-    </div>
-    {{else}}<div class="nochart">{{if $.TripTracks}}Nothing was playing at top speed{{else}}Songs show up for drives after now-playing was turned on{{end}}</div>{{end}}
-  </div>
+<div style="margin-bottom:16px">
   <div class="card">
     <h2 class="bracket-title">Compound</h2>
     {{if $.Board.Compounds}}
