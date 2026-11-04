@@ -67,6 +67,16 @@ func (s *Server) tripPage(w http.ResponseWriter, r *http.Request) {
 	all, _ := s.Store.TripStats(r.Context(), s.Poller.VIN())
 	d.Board = tripBoard(t, all, circuitPoints(t.Path, filled), "/trips/")
 	d.TripSections, _ = s.Store.Sections(r.Context(), s.Poller.VIN(), t.Start, t.End)
+	// map previews for the sections (section IDs don't overlap trip IDs on this page)
+	d.TripPreviews, d.TripPreviewPaths = map[int64]template.HTML{}, map[int64]string{}
+	for _, sec := range d.TripSections {
+		if sec.Trip != nil && len(sec.Trip.Path) > 1 {
+			d.TripPreviews[sec.ID] = routeSVG(sec.Trip.Path)
+			if b, err := json.Marshal(thin(sec.Trip.Path, 200)); err == nil {
+				d.TripPreviewPaths[sec.ID] = string(b)
+			}
+		}
+	}
 	s.render(w, "index.html", d)
 }
 
