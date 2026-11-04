@@ -154,7 +154,9 @@ func sectors(pts []circuitPoint) []Sector {
 
 // circuitSVG draws the route as a race-track outline: a white line over a
 // dropped shadow, one path per sector, sector labels, the start flag and a
-// marker where the drive hit its top speed.
+// marker where the drive hit its top speed. It uses the map tiles' Web
+// Mercator projection and carries the lat/lon its corners stand for, so the page
+// can lay a street map exactly underneath.
 func circuitSVG(pts []circuitPoint, secs []Sector) template.HTML {
 	runs := sectorBounds(pts)
 	if len(runs) == 0 {
@@ -162,8 +164,10 @@ func circuitSVG(pts []circuitPoint, secs []Sector) template.HTML {
 	}
 	const w, h, pad = 360.0, 240.0, 30.0
 	minX, maxX, minY, maxY := math.Inf(1), math.Inf(-1), math.Inf(1), math.Inf(-1)
-	k := math.Cos(pts[0].Lat * math.Pi / 180)
-	proj := func(p circuitPoint) (float64, float64) { return p.Lon * k, -p.Lat }
+	proj := func(p circuitPoint) (float64, float64) { // degrees of longitude, y down
+		return p.Lon, -math.Log(math.Tan(math.Pi/4+p.Lat*math.Pi/360)) * 180 / math.Pi
+	}
+	lat := func(y float64) float64 { return (2*math.Atan(math.Exp(-y*math.Pi/180)) - math.Pi/2) * 180 / math.Pi }
 	for _, p := range pts {
 		x, y := proj(p)
 		minX, maxX, minY, maxY = math.Min(minX, x), math.Max(maxX, x), math.Min(minY, y), math.Max(maxY, y)
@@ -188,7 +192,11 @@ func circuitSVG(pts []circuitPoint, secs []Sector) template.HTML {
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, `<svg class="circuit" viewBox="0 0 %.0f %.0f" role="img" aria-label="Route in three sectors">`, w, h)
+	// the drawing's corners as [[south, west], [north, east]]
+	west, north := minX-ox/scale, lat(minY-oy/scale)
+	east, south := minX+(w-ox)/scale, lat(minY+(h-oy)/scale)
+	fmt.Fprintf(&b, `<svg class="circuit" viewBox="0 0 %.0f %.0f" data-bounds="[[%.6f,%.6f],[%.6f,%.6f]]" role="img" aria-label="Route in three sectors">`,
+		w, h, south, west, north, east)
 	all := line(pts)
 	fmt.Fprintf(&b, `<path class="c-shadow" d="%s" transform="translate(5 6)"/>`, all)
 	fmt.Fprintf(&b, `<path class="c-edge" d="%s"/>`, all)

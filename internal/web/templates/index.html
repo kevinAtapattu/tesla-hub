@@ -200,7 +200,13 @@
   .circuit-card { margin-bottom: 16px; }
   .cc-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 20px; align-items: center; }
   @media (max-width: 767px) { .cc-grid { grid-template-columns: 1fr; } }
-  .circuit { display: block; width: 100%; height: auto; overflow: visible; }
+  .circuit { display: block; width: 100%; height: auto; overflow: visible; position: relative; z-index: 1; }
+  .cc-map { position: relative; }
+  .cc-tiles, .cc-tiles.leaflet-container { position: absolute; inset: 0; z-index: 0; pointer-events: none; background: transparent; opacity: .4;
+    -webkit-mask-image: radial-gradient(ellipse at center, #000 55%, transparent 100%); mask-image: radial-gradient(ellipse at center, #000 55%, transparent 100%); }
+  .dark .cc-tiles .leaflet-tile-pane { filter: invert(.92) hue-rotate(180deg) saturate(.3) brightness(1.1); }
+  .cc-tiles .leaflet-control-attribution { font-size: 8px; padding: 0 3px; background: transparent; color: var(--muted); }
+  .cc-tiles .leaflet-control-attribution a { color: inherit; }
   .circuit path { fill: none; stroke-linecap: round; stroke-linejoin: round; }
   .c-shadow { stroke: var(--track); stroke-width: 14; }
   .c-edge { stroke: var(--surface-2); stroke-width: 11; }

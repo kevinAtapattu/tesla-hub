@@ -215,6 +215,24 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
+  // A faint street map under the drive-info route. The route is drawn in the
+  // tiles' projection with its corners' lat/lon, so the two line up exactly.
+  (function () {
+    var svg = document.querySelector(".circuit[data-bounds]");
+    if (!svg || !window.L) return;
+    var el = document.createElement("div");
+    el.className = "cc-tiles";
+    svg.parentNode.insertBefore(el, svg);
+    var map = L.map(el, { zoomSnap: 0, zoomControl: false, dragging: false, scrollWheelZoom: false, doubleClickZoom: false,
+      boxZoom: false, keyboard: false, touchZoom: false, tap: false, attributionControl: true });
+    map.attributionControl.setPrefix(false);
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(map);
+    var fit = function () { map.invalidateSize(); map.fitBounds(JSON.parse(svg.dataset.bounds), { padding: [0, 0], animate: false }); };
+    fit();
+    if ("ResizeObserver" in window) new ResizeObserver(fit).observe(svg);
+  })();
+</script>
+<script>
   (function () {
     var pts = {{$.TripPath}} || [];
     if (!pts.length || !window.L) return;
