@@ -49,3 +49,19 @@ func TestTrackAt(t *testing.T) {
 		}
 	}
 }
+
+func TestCurrentStopsWithTheCar(t *testing.T) {
+	at := func(s int) time.Time { return time.Date(2026, 11, 4, 13, 0, s, 0, time.UTC) }
+	str := func(s string) *string { return &s }
+	ev := []store.MediaEvent{
+		{Time: at(0), Title: str("Props & Mayhem"), Artist: str("Pierce The Veil • From Smart Shuffle • Lossless"), Status: str("MediaStatusPlaying")},
+	}
+	if tr := current(playlist(ev)); tr == nil || tr.Artist != "Pierce The Veil" {
+		t.Fatalf("playing: %+v", tr)
+	}
+	// what the car sends when it shuts the player off
+	ev = append(ev, store.MediaEvent{Time: at(60), Status: str("MediaStatusStopped"), Title: str(""), Artist: str(""), Album: str(""), Station: str("No device connected")})
+	if tr := current(playlist(ev)); tr != nil {
+		t.Errorf("still showing %+v after the car stopped", tr)
+	}
+}

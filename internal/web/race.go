@@ -209,7 +209,11 @@ func playlist(events []store.MediaEvent) []Track {
 		if newTitle {
 			cur = Track{Title: *e.Title, Start: e.Time, Station: cur.Station, Source: cur.Source, Status: cur.Status}
 		}
-		set(&cur.Artist, e.Artist)
+		if e.Artist != nil {
+			// Spotify tacks on notes like "• From Smart Shuffle • Lossless"
+			a, _, _ := strings.Cut(*e.Artist, " • ")
+			cur.Artist = a
+		}
 		set(&cur.Album, e.Album)
 		set(&cur.Station, e.Station)
 		set(&cur.Source, e.Source)
@@ -242,15 +246,22 @@ func (s *Server) nowPlaying(ctx context.Context) *Track {
 	if err != nil {
 		return nil
 	}
-	ts := playlist(ev)
+	t := current(playlist(ev))
+	if t != nil {
+		s.coverArt(ctx, t)
+	}
+	return t
+}
+
+// current is the last track, or nil once the car has stopped or cleared it.
+func current(ts []Track) *Track {
 	if len(ts) == 0 {
 		return nil
 	}
 	t := ts[len(ts)-1]
-	if t.Status == "Stopped" {
+	if !t.Ended.IsZero() || t.Status == "Stopped" {
 		return nil
 	}
-	s.coverArt(ctx, &t)
 	return &t
 }
 
