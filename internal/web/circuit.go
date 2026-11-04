@@ -18,8 +18,7 @@ type TripBoard struct {
 	Number    int // the drive's place in the history, 1 for the first
 	Circuit   template.HTML
 	Sectors   []Sector
-	Ratings   []Rating
-	Basis     int // telemetry drives the ratings compare against
+	Ratings   []Rating // feed the compound
 	Compounds []Compound
 	Ranks     []Rank
 }
@@ -190,7 +189,7 @@ func circuitSVG(pts []circuitPoint, secs []Sector) template.HTML {
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, `<svg class="circuit" viewBox="0 0 %.0f %.0f" role="img" aria-label="Route drawn as a circuit in three sectors">`, w, h)
+	fmt.Fprintf(&b, `<svg class="circuit" viewBox="0 0 %.0f %.0f" role="img" aria-label="Route in three sectors">`, w, h)
 	all := line(pts)
 	fmt.Fprintf(&b, `<path class="c-shadow" d="%s" transform="translate(5 6)"/>`, all)
 	fmt.Fprintf(&b, `<path class="c-edge" d="%s"/>`, all)
@@ -315,9 +314,6 @@ func tripBoard(t *store.SavedTrip, all []store.SavedTrip, pts []circuitPoint) Tr
 	for i, o := range all {
 		if o.ID == t.ID {
 			b.Number = i + 1
-		}
-		if o.Source == "telemetry" {
-			b.Basis++
 		}
 	}
 	b.Sectors = sectors(pts)

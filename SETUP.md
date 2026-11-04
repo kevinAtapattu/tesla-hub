@@ -1,4 +1,4 @@
-# Tesla Hub setup
+# TesRace setup
 
 Already done for you:
 

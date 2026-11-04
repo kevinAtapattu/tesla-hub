@@ -26,7 +26,7 @@ func (s *Server) tripsPage(w http.ResponseWriter, r *http.Request) {
 	d.Drivers, _ = s.Store.Drivers(r.Context())
 	d.TripTotals = totals(d.Trips)
 	s.previews(&d)
-	s.topSongs(r.Context(), &d)
+	d.TripSongs = s.topSongs(r.Context(), d.Trips)
 	d.Live = s.liveTrip(r)
 	d.NowPlaying = s.nowPlaying(r.Context())
 	s.render(w, "index.html", d)

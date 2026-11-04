@@ -236,7 +236,7 @@ func (w *Watcher) Send(ctx context.Context, msg string) error {
 	if !w.Ready() {
 		return fmt.Errorf("set DISCORD_WEBHOOK_URL in .env, then run docker compose up -d hub")
 	}
-	body := map[string]any{"username": "Tesla Hub", "content": msg, "allowed_mentions": map[string]any{"parse": []string{}}}
+	body := map[string]any{"username": "TesRace", "content": msg, "allowed_mentions": map[string]any{"parse": []string{}}}
 	if w.MentionID != "" {
 		body["content"] = msg + " <@" + w.MentionID + ">"
 		body["allowed_mentions"] = map[string]any{"users": []string{w.MentionID}}

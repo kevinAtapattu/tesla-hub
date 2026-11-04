@@ -158,7 +158,13 @@ func (s *Server) racePage(w http.ResponseWriter, r *http.Request) {
 		d.Race = raceBoard(all, d.DriverFilter)
 		d.Trips, _ = s.Store.ListTrips(r.Context(), vin, d.DriverFilter, 4)
 		s.previews(&d)
-		s.topSongs(r.Context(), &d)
+		songsFor := d.Trips
+		for _, t := range all { // the top-speed record's song too
+			if t.ID == d.Race.TopSpeed.TripID {
+				songsFor = append(songsFor[:len(songsFor):len(songsFor)], t)
+			}
+		}
+		d.TripSongs = s.topSongs(r.Context(), songsFor)
 	}
 	d.Live = s.liveTrip(r)
 	d.NowPlaying = s.nowPlaying(r.Context())
@@ -167,6 +173,7 @@ func (s *Server) racePage(w http.ResponseWriter, r *http.Request) {
 
 // Track is a song or station that played in the car.
 type Track struct {
+	Art                  string // cover image URL, looked up by title and artist; "" when unknown
 	Title, Artist, Album string
 	Station, Source      string
 	Start                time.Time
@@ -242,6 +249,7 @@ func (s *Server) nowPlaying(ctx context.Context) *Track {
 	if t.Status == "Stopped" {
 		return nil
 	}
+	s.coverArt(ctx, &t)
 	return &t
 }
 
@@ -272,7 +280,13 @@ func (s *Server) soundtrack(ctx context.Context, t *store.SavedTrip, samples []t
 			}
 		}
 	}
-	return out, trackAt(out, top)
+	at := trackAt(out, top)
+	ptrs := []*Track{at}
+	for i := range out {
+		ptrs = append(ptrs, &out[i])
+	}
+	s.coverArt(ctx, ptrs...)
+	return out, at
 }
 
 // trackAt is the track playing at t, or nil when nothing was.
@@ -290,13 +304,13 @@ func trackAt(ts []Track, t time.Time) *Track {
 	return at
 }
 
-// topSongs finds the track playing at each listed trip's top speed.
-func (s *Server) topSongs(ctx context.Context, d *pageData) {
-	if len(d.Trips) == 0 {
-		return
+// topSongs finds the track playing at each trip's top speed.
+func (s *Server) topSongs(ctx context.Context, ts []store.SavedTrip) map[int64]*Track {
+	if len(ts) == 0 {
+		return nil
 	}
-	from, to := d.Trips[0].Start, d.Trips[0].End
-	for _, t := range d.Trips {
+	from, to := ts[0].Start, ts[0].End
+	for _, t := range ts {
 		if t.Start.Before(from) {
 			from = t.Start
 		}
@@ -306,15 +320,21 @@ func (s *Server) topSongs(ctx context.Context, d *pageData) {
 	}
 	ev, err := s.Store.MediaEvents(ctx, s.Poller.VIN(), from.Add(-2*time.Hour), to)
 	if err != nil || len(ev) == 0 {
-		return
+		return nil
 	}
 	all := playlist(ev)
-	d.TripSongs = map[int64]*Track{}
-	for _, t := range d.Trips {
+	out := map[int64]*Track{}
+	var shown []*Track
+	for _, t := range ts {
 		if !t.TopSpeedAt.IsZero() {
-			d.TripSongs[t.ID] = trackAt(all, t.TopSpeedAt)
+			if at := trackAt(all, t.TopSpeedAt); at != nil {
+				out[t.ID] = at
+				shown = append(shown, at)
+			}
 		}
 	}
+	s.coverArt(ctx, shown...)
+	return out
 }
 
 // gauge is a speedometer arc filled to v of max, coloured along the speed scale.

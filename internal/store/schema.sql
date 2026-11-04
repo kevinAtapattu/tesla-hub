@@ -167,3 +167,13 @@ CREATE TABLE IF NOT EXISTS driver_events (
 );
 CREATE INDEX IF NOT EXISTS driver_events_time ON driver_events (time DESC);
 ALTER TABLE trips ADD COLUMN IF NOT EXISTS driver text;
+
+-- Album art for songs the car played, looked up by title and artist. url is ''
+-- when the lookup found nothing, so it isn't retried on every page view.
+CREATE TABLE IF NOT EXISTS media_art (
+    title      text NOT NULL,
+    artist     text NOT NULL,
+    url        text NOT NULL,
+    looked_at  timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (title, artist)
+);

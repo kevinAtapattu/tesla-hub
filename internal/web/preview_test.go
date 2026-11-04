@@ -25,7 +25,8 @@ func TestPreviewMedia(t *testing.T) {
 	playing := &Track{Title: "Blinding Lights", Artist: "The Weeknd", Album: "After Hours", Source: "Spotify", Status: "Playing", Start: now.Add(-2 * time.Minute)}
 	tracks := []Track{
 		{Title: "Midnight City", Artist: "M83", Source: "Spotify", Start: now.Add(-14 * time.Minute)},
-		{Title: "Nightcall", Artist: "Kavinsky", Source: "Spotify", Start: now.Add(-10 * time.Minute)},
+		{Title: "Nightcall", Artist: "Kavinsky", Source: "Bluetooth", Start: now.Add(-10 * time.Minute),
+			Art: "https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/c1/2d/fe/c12dfe8f-cdf6-e179-d69a-8ec35f760266/00602537248681.rgb.jpg/300x300bb.jpg"},
 		*playing,
 	}
 	zt, z6 := 5200*time.Millisecond, 3100*time.Millisecond

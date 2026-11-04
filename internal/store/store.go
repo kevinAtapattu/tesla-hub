@@ -744,3 +744,40 @@ func (s *Store) Drivers(ctx context.Context) ([]string, error) {
 	}
 	return out, rows.Err()
 }
+
+// ArtKey is a song to find cover art for.
+type ArtKey struct{ Title, Artist string }
+
+// MediaArt returns the cached cover URLs for the keys it has looked up before;
+// a found-nothing lookup comes back as "".
+func (s *Store) MediaArt(ctx context.Context, keys []ArtKey) (map[ArtKey]string, error) {
+	titles, artists := make([]string, len(keys)), make([]string, len(keys))
+	for i, k := range keys {
+		titles[i], artists[i] = k.Title, k.Artist
+	}
+	rows, err := s.db.Query(ctx, `
+		SELECT a.title, a.artist, a.url FROM media_art a
+		JOIN unnest($1::text[], $2::text[]) AS k(title, artist) ON a.title = k.title AND a.artist = k.artist`, titles, artists)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[ArtKey]string{}
+	for rows.Next() {
+		var k ArtKey
+		var url string
+		if err := rows.Scan(&k.Title, &k.Artist, &url); err != nil {
+			return nil, err
+		}
+		out[k] = url
+	}
+	return out, rows.Err()
+}
+
+// SaveMediaArt caches a lookup; url is "" when nothing was found.
+func (s *Store) SaveMediaArt(ctx context.Context, k ArtKey, url string) error {
+	_, err := s.db.Exec(ctx, `
+		INSERT INTO media_art (title, artist, url) VALUES ($1, $2, $3)
+		ON CONFLICT (title, artist) DO UPDATE SET url = EXCLUDED.url, looked_at = now()`, k.Title, k.Artist, url)
+	return err
+}

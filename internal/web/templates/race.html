@@ -35,7 +35,8 @@
   <a class="card speedo" {{if .TripID}}href="/trips/{{.TripID}}"{{end}}>
     <div class="speedo-dial">{{gauge .N 200}}
       <div class="speedo-read"><b class="timer">{{.Value}}</b><span>km/h</span></div></div>
-    <div class="speedo-foot"><b>Top speed</b><span>{{if .TripID}}{{local .When}}{{with .Driver}} · {{.}}{{end}}{{else}}No drives yet{{end}}</span></div>
+    <div class="speedo-foot"><b>Top speed</b><span>{{if .TripID}}{{local .When}}{{with .Driver}} · {{.}}{{end}}{{else}}No drives yet{{end}}</span>
+      {{with index $.TripSongs .TripID}}<div class="top-song center">{{template "art" .}}<span>Was listening to <b>{{if .Title}}{{.Title}}{{else}}{{.Station}}{{end}}</b>{{with .Artist}} · {{.}}{{end}}</span></div>{{end}}</div>
   </a>
   {{end}}
 </div>

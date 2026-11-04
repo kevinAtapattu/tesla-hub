@@ -48,7 +48,7 @@
 </div>
 
 <div class="card circuit-card" id="circuit-card">
-  <h2 class="bracket-title">Circuit information</h2>
+  <h2 class="bracket-title">Drive info</h2>
   <div class="cc-grid">
     <div class="cc-map">{{if $.Board.Circuit}}{{$.Board.Circuit}}{{else}}<div class="nochart">No route recorded</div>{{end}}</div>
     <div class="specs">
@@ -56,7 +56,6 @@
       <div class="spec"><span>Duration</span><b>{{hms .Duration}}</b></div>
       <div class="spec"><span>Top speed</span><b>{{nf "c-top" .MaxSpeedKmh 0}}<small>km/h</small></b></div>
       <div class="spec"><span>Average</span><b>{{nf "c-avg" .AvgSpeedKmh 0}}<small>km/h</small></b></div>
-      {{with $.TopSpeedTrack}}<div class="spec wide song"><span>On at top speed</span><b>♪ {{.Line}}</b></div>{{end}}
     </div>
   </div>
   {{if and $.Board.Sectors (index $.Board.Sectors 0).Time}}
@@ -101,18 +100,14 @@
 {{end}}
 
 <div class="grid g2" style="margin-bottom:16px">
-  <div class="card">
-    <h2 class="bracket-title">Drive character</h2>
-    <div class="scale-key"><span>Min</span><i>1</i><span>Max</span><i class="on">5</i><span class="muted">vs your {{$.Board.Basis}} streamed drives</span></div>
-    <div class="ratings">
-      {{range $.Board.Ratings}}{{$s := .Score}}
-      <div class="rating{{if not $s}} none{{end}}">
-        <span class="rl">{{.Label}}</span>
-        <span class="cells">{{range seq 5}}<i class="{{if eq . $s}}on{{else if lt . $s}}lit{{end}}" style="animation-delay:{{.}}00ms">{{.}}</i>{{end}}</span>
-        <span class="rv timer">{{.Value}}</span>
-      </div>
-      {{end}}
+  <div class="card song-card">
+    <h2 class="bracket-title">Top-speed song</h2>
+    {{with $.TopSpeedTrack}}
+    <div class="song-at">{{template "art" .}}
+      <p>Was listening to <b>{{if .Title}}{{.Title}}{{else}}{{.Station}}{{end}}</b>{{with .Artist}} by {{.}}{{end}} at <b class="speed timer">{{printf "%.0f" $.Trip.MaxSpeedKmh}}<small>km/h</small></b></p>
+      {{with .Source}}<span class="muted">via {{.}}</span>{{end}}
     </div>
+    {{else}}<div class="nochart">{{if $.TripTracks}}Nothing was playing at top speed{{else}}Songs show up for drives after now-playing was turned on{{end}}</div>{{end}}
   </div>
   <div class="card">
     <h2 class="bracket-title">Compound</h2>
@@ -126,7 +121,7 @@
       </div>
       {{end}}
     </div>
-    <p class="muted small">How hard you drove, from the launch, braking, cornering, power and top-speed ratings.</p>
+    <p class="muted small">How hard you drove: your launch, braking, cornering, power and top speed, compared with your other drives.</p>
     {{else}}<div class="nochart">Needs live telemetry</div>{{end}}
   </div>
 </div>
@@ -142,7 +137,7 @@
     {{if $.TripG}}<div class="gwrap">{{$.TripG}}</div>{{else}}<div class="nochart">Needs live telemetry</div>{{end}}
   </div>
   <div class="card">
-    <h2 class="card-title">Soundtrack {{with $.TopSpeedTrack}}<span class="muted">top speed to {{.Title}}</span>{{end}}</h2>
+    <h2 class="card-title">Soundtrack</h2>
     {{if $.TripTracks}}
     <div class="tracks">
       {{range $.TripTracks}}
@@ -234,7 +229,7 @@
     <div class="trip-when">
       <div class="trip-title">{{partOfDay .Start}}{{if .Driver}} <span class="pill driver">{{.Driver}}</span>{{end}}</div>
       <div class="muted num">{{local .Start}} · {{hms .Duration}}</div>
-      {{with index $.TripSongs .ID}}<div class="top-song"><svg class="i" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg><span>{{.Line}}</span></div>{{end}}
+      {{$top := .MaxSpeedKmh}}{{with index $.TripSongs .ID}}<div class="top-song">{{template "art" .}}<span>Was listening to <b>{{if .Title}}{{.Title}}{{else}}{{.Station}}{{end}}</b>{{with .Artist}} · {{.}}{{end}} at <b>{{printf "%.0f" $top}} km/h</b></span></div>{{end}}
     </div>
     <div class="trip-nums">
       <div><b class="num">{{printf "%.0f" .MaxSpeedKmh}}<small>km/h</small></b><span>Top speed</span></div>
@@ -289,7 +284,7 @@
 
 {{define "tyre"}}<svg class="tyre-svg" viewBox="0 0 100 100" aria-hidden="true"><circle class="rubber" cx="50" cy="50" r="46"/><circle class="band" cx="50" cy="50" r="35"/><circle class="rim" cx="50" cy="50" r="27"/><g class="spokes"><line x1="50" y1="50" x2="50" y2="24" transform="rotate(0 50 50)"/><line x1="50" y1="50" x2="50" y2="24" transform="rotate(36 50 50)"/><line x1="50" y1="50" x2="50" y2="24" transform="rotate(72 50 50)"/><line x1="50" y1="50" x2="50" y2="24" transform="rotate(108 50 50)"/><line x1="50" y1="50" x2="50" y2="24" transform="rotate(144 50 50)"/><line x1="50" y1="50" x2="50" y2="24" transform="rotate(180 50 50)"/><line x1="50" y1="50" x2="50" y2="24" transform="rotate(216 50 50)"/><line x1="50" y1="50" x2="50" y2="24" transform="rotate(252 50 50)"/><line x1="50" y1="50" x2="50" y2="24" transform="rotate(288 50 50)"/><line x1="50" y1="50" x2="50" y2="24" transform="rotate(324 50 50)"/></g><circle class="hub" cx="50" cy="50" r="7"/></svg>{{end}}
 
-{{define "art"}}<span class="art" aria-hidden="true"><svg class="i" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span>{{end}}
+{{define "art"}}<span class="art" aria-hidden="true">{{with .Art}}<img src="{{.}}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">{{end}}<svg class="i" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span>{{end}}
 
 {{define "now-playing"}}
 <div class="track now">{{template "art" .}}<div class="tmeta"><span class="eyebrow">{{if eq .Status "Paused"}}Paused{{else}}Now playing{{end}}{{with .Source}} · {{.}}{{end}}</span>
