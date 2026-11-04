@@ -50,6 +50,25 @@
   {{end}}
 </div>
 
+{{if .Form}}
+<div class="form-grid">
+  <div class="honours">
+    {{range $i, $h := .Honours}}
+    <div class="card honour"><span>{{$h.Label}}</span><b>{{nf (printf "hon-%d" $i) $h.N 0}}</b></div>
+    {{end}}
+  </div>
+  <div class="card form">
+    <h2 class="card-title">Form <span class="muted">recent drives · tap a bar</span></h2>
+    {{range .Form}}
+    <div class="form-row">
+      <div class="fr-num"><b class="timer">{{.Avg}}<small>{{.Unit}}</small></b><span>{{.Label}} avg</span></div>
+      {{.Bars}}
+    </div>
+    {{end}}
+  </div>
+</div>
+{{end}}
+
 {{if .Drivers}}
 <div class="card flush" style="margin-bottom:16px">
   <h2 class="card-title">Leaderboard <span class="muted">fastest 0–100 first</span></h2>

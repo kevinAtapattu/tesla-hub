@@ -32,10 +32,10 @@
 
 {{define "trip"}}
 {{with .Trip}}
-<div class="page-head">
+<div class="report-head">
   <div>
-    <h1>{{partOfDay .Start}}</h1>
-    <p>{{local .Start}} to {{clock .End}} · {{hms .Duration}}</p>
+    <div class="kicker">{{with $.Board.Number}}Drive {{.}} · {{end}}{{local .Start}} – {{clock .End}}{{with .Driver}} · {{.}}{{end}}</div>
+    <h1 class="report-title"><span>{{partOfDay .Start}}</span> <b>Report</b></h1>
   </div>
   <div class="actions">
     <form method="post" action="/trips/{{.ID}}/driver" class="chips" style="gap:6px">
@@ -43,8 +43,35 @@
       <datalist id="drivers">{{range $.Drivers}}<option value="{{.}}">{{end}}</datalist>
       <button class="btn">Save</button>
     </form>
-    <a class="btn" href="/trips">All trips</a>
+    <a class="btn" href="/trips">All drives</a>
   </div>
+</div>
+
+<div class="card circuit-card" id="circuit-card">
+  <h2 class="bracket-title">Circuit information</h2>
+  <div class="cc-grid">
+    <div class="cc-map">{{if $.Board.Circuit}}{{$.Board.Circuit}}{{else}}<div class="nochart">No route recorded</div>{{end}}</div>
+    <div class="specs">
+      <div class="spec"><span>Distance</span><b>{{nf "c-dist" .DistanceKm 2}}<small>km</small></b></div>
+      <div class="spec"><span>Duration</span><b>{{hms .Duration}}</b></div>
+      <div class="spec"><span>Top speed</span><b>{{nf "c-top" .MaxSpeedKmh 0}}<small>km/h</small></b></div>
+      <div class="spec"><span>Average</span><b>{{nf "c-avg" .AvgSpeedKmh 0}}<small>km/h</small></b></div>
+      {{with $.TopSpeedTrack}}<div class="spec wide song"><span>On at top speed</span><b>♪ {{.Line}}</b></div>{{end}}
+    </div>
+  </div>
+  {{if and $.Board.Sectors (index $.Board.Sectors 0).Time}}
+  <div class="sectors" role="table" aria-label="Sectors">
+    <div class="sec-row head" role="row"><span>Sector</span><span>Time</span><span>Average</span><span>Top</span></div>
+    {{range $.Board.Sectors}}
+    <div class="sec-row" role="row" data-s="{{.N}}" tabindex="0">
+      <span><i class="sec-chip {{.Class}}">S{{.N}}</i></span>
+      <b class="timer {{.Class}}">{{lap .Time}}</b>
+      <span class="timer">{{if .AvgKmh}}{{printf "%.0f" .AvgKmh}}<small>km/h</small>{{else}}—{{end}}</span>
+      <span class="timer">{{printf "%.0f" .TopKmh}}<small>km/h</small></span>
+    </div>
+    {{end}}
+  </div>
+  {{end}}
 </div>
 
 <div class="card hero launch">
@@ -61,11 +88,47 @@
   </div>
 </div>
 
-<div class="grid g4" style="margin-bottom:16px">
-  <div class="card stat"><div class="label">Top speed</div><div class="value">{{nf "t-top" .MaxSpeedKmh 0}}<span class="unit">km/h</span></div><div class="hint">{{with $.TopSpeedTrack}}♪ {{.Line}}{{else}}avg {{printf "%.0f" $.Trip.AvgSpeedKmh}} km/h moving{{end}}</div></div>
-  <div class="card stat"><div class="label">Peak power</div><div class="value">{{nf "t-pwr" .PeakPowerKW 0}}<span class="unit">kW</span></div><div class="hint">{{printf "%.0f" .PeakRegenKW}} kW regen</div></div>
-  <div class="card stat"><div class="label">Peak g</div><div class="value">{{if .MaxCombinedG}}{{printf "%.2f" .MaxCombinedG}}<span class="unit">g</span>{{else}}—{{end}}</div><div class="hint">brake {{printf "%.2f" .MaxBrakeG}} · corner {{printf "%.2f" .MaxLatG}}</div></div>
-  <div class="card stat"><div class="label">Distance</div><div class="value">{{nf "t-dist" .DistanceKm 1}}<span class="unit">km</span></div><div class="hint">{{hms .Moving}} moving</div></div>
+{{if $.Board.Ranks}}
+<div class="ranks">
+  {{range $.Board.Ranks}}
+  <div class="card rank">
+    <div class="rk-top"><span>{{.Label}}</span><span class="pos{{if eq .Pos 1}} p1{{end}}"><b>P{{.Pos}}</b>/{{.Of}}</span></div>
+    <div class="rk-val timer">{{.Value}}<small>{{.Unit}}</small></div>
+    {{.Bars}}
+  </div>
+  {{end}}
+</div>
+{{end}}
+
+<div class="grid g2" style="margin-bottom:16px">
+  <div class="card">
+    <h2 class="bracket-title">Drive character</h2>
+    <div class="scale-key"><span>Min</span><i>1</i><span>Max</span><i class="on">5</i><span class="muted">vs your {{$.Board.Basis}} streamed drives</span></div>
+    <div class="ratings">
+      {{range $.Board.Ratings}}{{$s := .Score}}
+      <div class="rating{{if not $s}} none{{end}}">
+        <span class="rl">{{.Label}}</span>
+        <span class="cells">{{range seq 5}}<i class="{{if eq . $s}}on{{else if lt . $s}}lit{{end}}" style="animation-delay:{{.}}00ms">{{.}}</i>{{end}}</span>
+        <span class="rv timer">{{.Value}}</span>
+      </div>
+      {{end}}
+    </div>
+  </div>
+  <div class="card">
+    <h2 class="bracket-title">Compound</h2>
+    {{if $.Board.Compounds}}
+    <div class="compounds">
+      {{range $.Board.Compounds}}
+      <div class="tyre {{.Class}}{{if .On}} on{{end}}">
+        <span class="code">{{.Code}}</span>
+        {{template "tyre"}}
+        <b>{{.Name}}</b><span class="note">{{.Note}}</span>
+      </div>
+      {{end}}
+    </div>
+    <p class="muted small">How hard you drove, from the launch, braking, cornering, power and top-speed ratings.</p>
+    {{else}}<div class="nochart">Needs live telemetry</div>{{end}}
+  </div>
 </div>
 
 <div class="card flush" style="margin-bottom:16px">
@@ -105,6 +168,18 @@
   {{end}}
 </div>
 
+<script>
+  // Point at a sector row to light up that part of the track.
+  (function () {
+    var card = document.getElementById("circuit-card"), svg = card && card.querySelector(".circuit");
+    if (!svg) return;
+    card.querySelectorAll(".sec-row[data-s], .c-label").forEach(function (el) {
+      var on = function () { svg.dataset.hl = el.dataset.s; }, off = function () { delete svg.dataset.hl; };
+      el.addEventListener("mouseenter", on); el.addEventListener("mouseleave", off);
+      el.addEventListener("focus", on); el.addEventListener("blur", off);
+    });
+  })();
+</script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
@@ -211,6 +286,8 @@
   })();
 </script>
 {{end}}
+
+{{define "tyre"}}<svg class="tyre-svg" viewBox="0 0 100 100" aria-hidden="true"><circle class="rubber" cx="50" cy="50" r="46"/><circle class="band" cx="50" cy="50" r="35"/><circle class="rim" cx="50" cy="50" r="27"/><g class="spokes"><line x1="50" y1="50" x2="50" y2="24" transform="rotate(0 50 50)"/><line x1="50" y1="50" x2="50" y2="24" transform="rotate(36 50 50)"/><line x1="50" y1="50" x2="50" y2="24" transform="rotate(72 50 50)"/><line x1="50" y1="50" x2="50" y2="24" transform="rotate(108 50 50)"/><line x1="50" y1="50" x2="50" y2="24" transform="rotate(144 50 50)"/><line x1="50" y1="50" x2="50" y2="24" transform="rotate(180 50 50)"/><line x1="50" y1="50" x2="50" y2="24" transform="rotate(216 50 50)"/><line x1="50" y1="50" x2="50" y2="24" transform="rotate(252 50 50)"/><line x1="50" y1="50" x2="50" y2="24" transform="rotate(288 50 50)"/><line x1="50" y1="50" x2="50" y2="24" transform="rotate(324 50 50)"/></g><circle class="hub" cx="50" cy="50" r="7"/></svg>{{end}}
 
 {{define "art"}}<span class="art" aria-hidden="true"><svg class="i" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span>{{end}}
 

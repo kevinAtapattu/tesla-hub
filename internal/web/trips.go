@@ -59,9 +59,10 @@ func (s *Server) tripPage(w http.ResponseWriter, r *http.Request) {
 	d.Drivers, _ = s.Store.Drivers(r.Context())
 	path, _ := json.Marshal(t.Path)
 	d.TripPath = template.JS(path)
+	var filled []trips.Sample
 	if t.Source == "telemetry" {
 		samples, _ := s.Store.TripSamples(r.Context(), s.Poller.VIN(), t.Start, t.End)
-		filled := trips.Fill(samples)
+		filled = trips.Fill(samples)
 		pts := make([]store.Point, 0, len(filled))
 		for _, x := range filled {
 			pts = append(pts, store.Point{Time: x.Time, SpeedKmh: x.SpeedKmh, PowerKW: x.PowerKW})
@@ -74,6 +75,8 @@ func (s *Server) tripPage(w http.ResponseWriter, r *http.Request) {
 		d.TripG = frictionCircle(filled)
 		d.TripTracks, d.TopSpeedTrack = s.soundtrack(r.Context(), t, filled)
 	}
+	all, _ := s.Store.TripStats(r.Context(), s.Poller.VIN())
+	d.Board = tripBoard(t, all, circuitPoints(t.Path, filled))
 	s.render(w, "index.html", d)
 }
 

@@ -42,6 +42,13 @@ func TestTemplatesRender(t *testing.T) {
 	pages[1].NowPlaying = &Track{Title: "Song", Artist: "Artist", Source: "Spotify", Status: "Playing"}
 	pages[1].TripTracks = []Track{*pages[1].NowPlaying, {Station: "CBC Radio"}}
 	pages[1].TopSpeedTrack = pages[1].NowPlaying
+	lat, lon, kmh := 43.6, -79.8, 0.0
+	var samples []trips.Sample
+	for i := range 40 {
+		la, lo, v := lat+float64(i)*0.001, lon+float64(i%7)*0.001, kmh+float64(i)*3
+		samples = append(samples, trips.Sample{Time: trip.Start.Add(time.Duration(i) * time.Second), Latitude: &la, Longitude: &lo, SpeedKmh: &v})
+	}
+	pages[1].Board = tripBoard(pages[1].Trip, pages[1].Trips, circuitPoints(nil, samples))
 	pages[1].AlertsOn, pages[1].AlertsNote = true, "Test sent."
 	pages[1].Alerts = alerts.Settings{Mode: alerts.Next, LastAt: time.Now()}
 	for i, d := range pages {

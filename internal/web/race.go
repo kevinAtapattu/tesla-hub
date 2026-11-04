@@ -35,6 +35,8 @@ type RaceBoard struct {
 	Drivers  []DriverRow
 	Drives   int
 	Km       float64
+	Form     []Form
+	Honours  []Honour
 }
 
 // DriverRow is one driver's bests, for the leaderboard.
@@ -74,7 +76,9 @@ func raceBoard(all []store.SavedTrip, driver string) RaceBoard {
 			maxRecord("Cornering", "g", 2, tele, func(t trips.Trip) float64 { return t.MaxLatG }),
 			maxRecord("Combined", "g", 2, tele, func(t trips.Trip) float64 { return t.MaxCombinedG }),
 		},
-		Drives: len(ts),
+		Drives:  len(ts),
+		Form:    formGuide(ts),
+		Honours: honours(ts),
 	}
 	rows := map[string]*DriverRow{}
 	for _, t := range ts {

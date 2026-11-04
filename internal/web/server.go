@@ -167,6 +167,7 @@ type pageData struct {
 	TripTracks       []Track          // what played during the trip
 	TopSpeedTrack    *Track           // what was on at the trip's top speed
 	TripSongs        map[int64]*Track // trip list: the song at each trip's top speed
+	Board            TripBoard        // trip page: circuit, sectors, ratings and ranks
 
 	Drivers      []string
 	DriverFilter string // trips page: only this driver's trips
@@ -587,10 +588,24 @@ func funcs(loc *time.Location) template.FuncMap {
 			}
 			return t.In(loc).Format("3:04 PM")
 		},
-		"mod":           func(a, b int) int { return a % b },
-		"nf":            rollingNumber,
-		"gauge":         gauge,
-		"inc":           func(i int) int { return i + 1 },
+		"mod":   func(a, b int) int { return a % b },
+		"nf":    rollingNumber,
+		"gauge": gauge,
+		"inc":   func(i int) int { return i + 1 },
+		"seq": func(n int) []int { // 1..n, for rating cells
+			out := make([]int, n)
+			for i := range out {
+				out[i] = i + 1
+			}
+			return out
+		},
+		"lap": func(d time.Duration) string { // a sector time: 1:23.4, or 48.2
+			d = d.Round(100 * time.Millisecond)
+			if m := int(d.Minutes()); m > 0 {
+				return fmt.Sprintf("%d:%04.1f", m, (d - time.Duration(m)*time.Minute).Seconds())
+			}
+			return fmt.Sprintf("%.1f", d.Seconds())
+		},
 		"speedStops":    speedStopsJS,
 		"speedGradient": speedGradient,
 		"deref": func(p *float64) float64 {
