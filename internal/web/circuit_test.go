@@ -53,11 +53,11 @@ func TestTripBoardRatings(t *testing.T) {
 	if b.Number != 10 || b.Ratings[0].Score != 5 {
 		t.Errorf("number %d, launch score %d", b.Number, b.Ratings[0].Score)
 	}
-	if b.Ranks[0].Pos != 0 || b.Ranks[1].Label != "0–100" || b.Ranks[1].Pos != 1 {
-		t.Errorf("ranks %+v", b.Ranks[:2])
+	if len(b.Ranks) != 3 || b.Ranks[1].Label != "0–100" || !strings.Contains(string(b.Ranks[0].Bars), `href="/trips/10" class="on"`) {
+		t.Errorf("ranks %+v", b.Ranks)
 	}
-	if b = tripBoard(&all[0], all, nil, "/trips/"); b.Ranks[1].Pos != 10 || b.Ratings[0].Score != 1 {
-		t.Errorf("slowest: pos %d, launch score %d", b.Ranks[0].Pos, b.Ratings[0].Score)
+	if b = tripBoard(&all[0], all, nil, "/trips/"); b.Ratings[0].Score != 1 {
+		t.Errorf("slowest: launch score %d", b.Ratings[0].Score)
 	}
 }
 

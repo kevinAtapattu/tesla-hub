@@ -128,7 +128,7 @@
 <div class="ranks">
   {{range $.Board.Ranks}}
   <div class="card rank">
-    <div class="rk-top"><span>{{.Label}}</span>{{if .Pos}}<span class="pos{{if eq .Pos 1}} p1{{end}}"><b>P{{.Pos}}</b>/{{.Of}}</span>{{end}}</div>
+    <div class="rk-top"><span>{{.Label}}</span></div>
     <div class="rk-val timer">{{.Value}}<small>{{.Unit}}</small></div>
     {{.Bars}}
   </div>
