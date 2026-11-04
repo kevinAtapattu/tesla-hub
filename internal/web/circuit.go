@@ -48,7 +48,7 @@ type Compound struct {
 // Rank is where one stat places among your drives, with recent drives as bars.
 type Rank struct {
 	Label, Value, Unit string
-	Pos, Of            int
+	Pos, Of            int // Pos 0 hides the position (top speed is mostly the road's limit)
 	Bars               template.HTML
 }
 
@@ -365,6 +365,9 @@ func tripBoard(t *store.SavedTrip, all []store.SavedTrip, pts []circuitPoint, ba
 			if o.ID != t.ID && ((st.lower && x < v) || (!st.lower && x > v)) {
 				r.Pos++
 			}
+		}
+		if st.label == statTop.label {
+			r.Pos = 0
 		}
 		r.Bars = rankBars(f, st, t.ID, base)
 		b.Ranks = append(b.Ranks, r)
