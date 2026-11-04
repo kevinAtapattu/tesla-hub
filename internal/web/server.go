@@ -68,6 +68,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /trips/{id}/driver", s.setTripDriver)
 	mux.HandleFunc("POST /driver", s.driverCheckIn) // the phone; checks its own token
 	mux.HandleFunc("GET /live", s.livePartial)
+	mux.HandleFunc("POST /sections/start", s.startSection)
+	mux.HandleFunc("POST /sections/stop", s.stopSection)
+	mux.HandleFunc("GET /sections/{id}", s.sectionPage)
+	mux.HandleFunc("POST /sections/{id}/name", s.renameSection)
+	mux.HandleFunc("POST /section", s.sectionShortcut) // the phone; checks its own token
 	mux.HandleFunc("GET /auth/login", s.login)
 	mux.HandleFunc("GET /auth/callback", s.callback) // must stay public: Tesla redirects here
 	mux.HandleFunc("POST /auth/logout", s.logout)
@@ -101,7 +106,7 @@ func (s *Server) basicAuth(next http.Handler) http.Handler {
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, pw, ok := r.BasicAuth()
-		if r.URL.Path == "/auth/callback" || r.URL.Path == "/healthz" || r.URL.Path == "/assistant" || r.URL.Path == "/driver" ||
+		if r.URL.Path == "/auth/callback" || r.URL.Path == "/healthz" || r.URL.Path == "/assistant" || r.URL.Path == "/driver" || r.URL.Path == "/section" ||
 			(ok && subtle.ConstantTimeCompare([]byte(pw), []byte(s.Cfg.DashboardPassword)) == 1) {
 			next.ServeHTTP(w, r)
 			return
@@ -150,6 +155,7 @@ type pageData struct {
 	AssistantModel string
 	AssistantURL   string
 	DriverURL      string
+	SectionURL     string
 	AssistantToken string
 	AssistantLog   []store.AssistantEntry
 
@@ -167,7 +173,11 @@ type pageData struct {
 	TripTracks       []Track          // what played during the trip
 	TopSpeedTrack    *Track           // what was on at the trip's top speed
 	TripSongs        map[int64]*Track // trip list: the song at each trip's top speed
-	Board            TripBoard        // trip page: circuit, sectors, ratings and ranks
+	Board            TripBoard        // trip page: route, sectors, compound and ranks
+	TripSections     []store.Section  // trip page: sections recorded during the drive
+	Section          *store.Section   // section page: the section shown as d.Trip
+	ParentTrip       *store.SavedTrip // section page: the drive it was part of
+	Recording        *Recording       // live card: the section being recorded
 
 	Drivers      []string
 	DriverFilter string // trips page: only this driver's trips
@@ -343,6 +353,7 @@ func (s *Server) page(name string) http.HandlerFunc {
 		}
 		d.AssistantURL = requestBase(r) + "/assistant"
 		d.DriverURL = requestBase(r) + "/driver"
+		d.SectionURL = requestBase(r) + "/section"
 		d.Drivers, _ = s.Store.Drivers(r.Context())
 		s.alertData(r.Context(), &d)
 		d.Flash = r.URL.Query().Get("flash")
@@ -592,6 +603,7 @@ func funcs(loc *time.Location) template.FuncMap {
 		"nf":    rollingNumber,
 		"gauge": gauge,
 		"inc":   func(i int) int { return i + 1 },
+		"since": func(t time.Time) time.Duration { return time.Since(t) },
 		"seq": func(n int) []int { // 1..n, for rating cells
 			out := make([]int, n)
 			for i := range out {

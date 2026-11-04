@@ -58,6 +58,20 @@
     </details>
   </div>
 
+  <div class="card span2" id="sections">
+    <h2 class="card-title">Record a section</h2>
+    <p class="muted" style="margin:-4px 0 16px">Record part of a drive, like a twisty road, without the drive there and back. Start it when you get there and stop it when you're done; the section gets its own report inside that drive. While driving, use the Record button on the live card, or this Shortcut so you never touch the screen.</p>
+    <details>
+      <summary class="sub-title" style="cursor:pointer;margin:0">Make a "Record section" Shortcut for Siri or the Action button</summary>
+      <ol style="margin:12px 0 0;padding-left:20px;display:grid;gap:8px;font-size:14px">
+        <li>Shortcuts app → <b>+</b> → name it <b>Record section</b>, so "Hey Siri, record section" runs it.</li>
+        <li>Add <b>Get Contents of URL</b>: <span class="mono">{{.SectionURL}}</span>, method <b>POST</b>.</li>
+        <li>Header <span class="mono">Authorization</span> = <span class="mono">Bearer</span> + the token (under Assistant above).</li>
+        <li>Add <b>Speak Text</b> with the URL's contents. The first run starts recording; the next one stops it and reads out the section's stats.</li>
+      </ol>
+    </details>
+  </div>
+
   <div class="card span2" id="drivers">
     <h2 class="card-title">Drivers</h2>
     <p class="muted" style="margin:-4px 0 16px">The car doesn't say which driver profile is in use, so each driver's phone tells the hub instead. Trips are tagged with whoever checked in during the 30 minutes before the drive. You can also change the driver on any trip.</p>

@@ -781,3 +781,123 @@ func (s *Store) SaveMediaArt(ctx context.Context, k ArtKey, url string) error {
 		ON CONFLICT (title, artist) DO UPDATE SET url = EXCLUDED.url, looked_at = now()`, k.Title, k.Artist, url)
 	return err
 }
+
+// Section is part of a drive recorded on purpose. End is zero and Trip nil
+// while it's recording; Trip is also nil when there was no data.
+type Section struct {
+	ID         int64
+	Name       string
+	Start, End time.Time
+	Trip       *trips.Trip
+}
+
+// Open reports whether the section is still recording.
+func (s Section) Open() bool { return s.End.IsZero() }
+
+const sectionCols = `id, name, start_at, coalesce(end_at, 'epoch'::timestamptz), summary`
+
+func scanSection(row pgx.Row) (*Section, error) {
+	var s Section
+	var raw []byte
+	if err := row.Scan(&s.ID, &s.Name, &s.Start, &s.End, &raw); err != nil {
+		return nil, err
+	}
+	if s.End.Unix() == 0 {
+		s.End = time.Time{}
+	}
+	if raw != nil {
+		s.Trip = &trips.Trip{}
+		if err := json.Unmarshal(raw, s.Trip); err != nil {
+			return nil, err
+		}
+	}
+	return &s, nil
+}
+
+// StartSection starts recording at the given time, or returns the section
+// already recording.
+func (s *Store) StartSection(ctx context.Context, vin string, at time.Time) (*Section, error) {
+	if open, err := s.OpenSection(ctx, vin); err != nil || open != nil {
+		return open, err
+	}
+	return scanSection(s.db.QueryRow(ctx, `
+		INSERT INTO sections (vin, start_at) VALUES ($1, $2) RETURNING `+sectionCols, vin, at))
+}
+
+// OpenSection is the section recording now, or nil.
+func (s *Store) OpenSection(ctx context.Context, vin string) (*Section, error) {
+	sec, err := scanSection(s.db.QueryRow(ctx, `SELECT `+sectionCols+` FROM sections WHERE vin = $1 AND end_at IS NULL`, vin))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	return sec, err
+}
+
+// EndSection stops a section and saves its stats (nil when there was no data).
+func (s *Store) EndSection(ctx context.Context, id int64, end time.Time, t *trips.Trip) error {
+	var summary []byte
+	if t != nil {
+		var err error
+		if summary, err = json.Marshal(t); err != nil {
+			return err
+		}
+	}
+	_, err := s.db.Exec(ctx, `UPDATE sections SET end_at = $2, summary = $3 WHERE id = $1`, id, end, summary)
+	return err
+}
+
+// GetSection returns one section, or nil.
+func (s *Store) GetSection(ctx context.Context, id int64) (*Section, error) {
+	sec, err := scanSection(s.db.QueryRow(ctx, `SELECT `+sectionCols+` FROM sections WHERE id = $1`, id))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	return sec, err
+}
+
+// RenameSection names a section ("" goes back to the default).
+func (s *Store) RenameSection(ctx context.Context, id int64, name string) error {
+	_, err := s.db.Exec(ctx, `UPDATE sections SET name = $2 WHERE id = $1`, id, name)
+	return err
+}
+
+// Sections returns the car's sections that started in [from, to), oldest
+// first; zero times leave that side open.
+func (s *Store) Sections(ctx context.Context, vin string, from, to time.Time) ([]Section, error) {
+	if to.IsZero() {
+		to = time.Now().Add(24 * time.Hour)
+	}
+	rows, err := s.db.Query(ctx, `SELECT `+sectionCols+` FROM sections
+		WHERE vin = $1 AND start_at >= $2 AND start_at < $3 ORDER BY start_at`, vin, from, to)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Section
+	for rows.Next() {
+		sec, err := scanSection(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *sec)
+	}
+	return out, rows.Err()
+}
+
+// TripOverlapping is the first saved drive that overlaps from..to (the one a
+// section starting at from belongs to), without its route, or nil.
+func (s *Store) TripOverlapping(ctx context.Context, vin string, from, to time.Time) (*SavedTrip, error) {
+	t := &SavedTrip{}
+	var raw []byte
+	err := s.db.QueryRow(ctx, `
+		SELECT id, source, coalesce(driver, ''), summary - 'Path' FROM trips
+		WHERE vin = $1 AND start_at <= $3 AND end_at >= $2 ORDER BY start_at LIMIT 1`, vin, from, to).
+		Scan(&t.ID, &t.Source, &t.Driver, &raw)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return t, json.Unmarshal(raw, &t.Trip)
+}

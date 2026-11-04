@@ -168,6 +168,7 @@ func (s *Server) racePage(w http.ResponseWriter, r *http.Request) {
 	}
 	d.Live = s.liveTrip(r)
 	d.NowPlaying = s.nowPlaying(r.Context())
+	d.Recording = s.recording(r.Context(), d.Live)
 	s.render(w, "index.html", d)
 }
 

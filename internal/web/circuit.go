@@ -309,7 +309,8 @@ func (st stat) field(all []store.SavedTrip) []store.SavedTrip {
 func (st stat) format(v float64) string { return fmt.Sprintf("%.*f", st.digits, v) }
 
 // tripBoard builds the race report for t from every drive's stats (oldest first).
-func tripBoard(t *store.SavedTrip, all []store.SavedTrip, pts []circuitPoint) TripBoard {
+// base is where each bar links: "/trips/" or "/sections/".
+func tripBoard(t *store.SavedTrip, all []store.SavedTrip, pts []circuitPoint, base string) TripBoard {
 	var b TripBoard
 	for i, o := range all {
 		if o.ID == t.ID {
@@ -365,7 +366,7 @@ func tripBoard(t *store.SavedTrip, all []store.SavedTrip, pts []circuitPoint) Tr
 				r.Pos++
 			}
 		}
-		r.Bars = rankBars(f, st, t.ID)
+		r.Bars = rankBars(f, st, t.ID, base)
 		b.Ranks = append(b.Ranks, r)
 	}
 	return b
@@ -374,7 +375,7 @@ func tripBoard(t *store.SavedTrip, all []store.SavedTrip, pts []circuitPoint) Tr
 // rankBars is an F1-style mini bar chart of up to 24 drives around the one
 // highlighted (oldest left). Better results are taller, so for times the
 // bars are inverted; every bar links to its drive.
-func rankBars(f []store.SavedTrip, st stat, on int64) template.HTML {
+func rankBars(f []store.SavedTrip, st stat, on int64, base string) template.HTML {
 	const n, w, h = 24, 240.0, 56.0
 	if len(f) == 0 {
 		return ""
@@ -409,8 +410,8 @@ func rankBars(f []store.SavedTrip, st stat, on int64) template.HTML {
 		if t.ID == on {
 			cls = ` class="on"`
 		}
-		fmt.Fprintf(&b, `<a href="/trips/%d"%s><title>%s · %s %s</title><rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" rx="1.5" style="animation-delay:%dms"/></a>`,
-			t.ID, cls, t.Start.Format("2 Jan"), st.format(v), st.unit, float64(i)*bw+bw*0.2, h-bh, bw*0.6, bh, i*25)
+		fmt.Fprintf(&b, `<a href="%s%d"%s><title>%s · %s %s</title><rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" rx="1.5" style="animation-delay:%dms"/></a>`,
+			base, t.ID, cls, t.Start.Format("2 Jan"), st.format(v), st.unit, float64(i)*bw+bw*0.2, h-bh, bw*0.6, bh, i*25)
 	}
 	b.WriteString(`</svg>`)
 	return template.HTML(b.String())
@@ -443,7 +444,7 @@ func formGuide(all []store.SavedTrip) []Form {
 			sum += v
 		}
 		out = append(out, Form{Label: st.label, Avg: st.format(sum / float64(len(recent))), Unit: st.unit,
-			Bars: rankBars(f, st, f[len(f)-1].ID)})
+			Bars: rankBars(f, st, f[len(f)-1].ID, "/trips/")})
 	}
 	return out
 }

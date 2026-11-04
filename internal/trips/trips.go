@@ -284,3 +284,23 @@ func haversineKm(lat1, lon1, lat2, lon2 float64) float64 {
 	a := math.Sin(dLat/2)*math.Sin(dLat/2) + math.Cos(lat1*rad)*math.Cos(lat2*rad)*math.Sin(dLon/2)*math.Sin(dLon/2)
 	return 2 * r * math.Asin(math.Sqrt(a))
 }
+
+// SectionLead is how much data before a section's start Section needs: the car
+// only sends values that changed (voltage every 10 s, gear only on a shift), so
+// the section's first seconds take theirs from earlier records.
+const SectionLead = 10 * time.Minute
+
+// Section summarizes from..to out of raw samples that begin at least
+// SectionLead before from. ok is false when fewer than two samples fall inside.
+func Section(raw []Sample, from, to time.Time) (t Trip, ok bool) {
+	var cut []Sample
+	for _, s := range Fill(raw) {
+		if !s.Time.Before(from) && !s.Time.After(to) {
+			cut = append(cut, s)
+		}
+	}
+	if len(cut) < 2 {
+		return Trip{}, false
+	}
+	return Summarize(cut, pathPoints), true
+}

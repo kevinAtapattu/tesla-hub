@@ -34,9 +34,25 @@
 {{with .Trip}}
 <div class="report-head">
   <div>
+    {{with $.Section}}
+    <div class="kicker">Section {{$.Board.Number}}{{with $.ParentTrip}} of <a class="link" href="/trips/{{.ID}}">{{partOfDay .Start}}</a>{{end}} · {{local $.Trip.Start}} – {{if .Open}}now{{else}}{{clock .End}}{{end}}</div>
+    <h1 class="report-title"><span>{{if .Name}}{{.Name}}{{else}}Section{{end}}</span> <b>Report</b></h1>
+    {{else}}
     <div class="kicker">{{with $.Board.Number}}Drive {{.}} · {{end}}{{local .Start}} – {{clock .End}}{{with .Driver}} · {{.}}{{end}}</div>
     <h1 class="report-title"><span>{{partOfDay .Start}}</span> <b>Report</b></h1>
+    {{end}}
   </div>
+  {{with $.Section}}
+  <div class="actions">
+    {{if .Open}}<span class="pill red"><span class="rec-dot pulse"></span>Recording</span>
+    <button class="btn rec" hx-post="/sections/stop" hx-swap="none"><span class="rec-stop"></span>Stop</button>{{end}}
+    <form method="post" action="/sections/{{.ID}}/name" class="chips" style="gap:6px">
+      <input type="text" name="name" value="{{.Name}}" placeholder="Name it, e.g. Forks of the Credit" style="width:14em" aria-label="Section name">
+      <button class="btn">Save</button>
+    </form>
+    {{with $.ParentTrip}}<a class="btn" href="/trips/{{.ID}}">Whole drive</a>{{end}}
+  </div>
+  {{else}}
   <div class="actions">
     <form method="post" action="/trips/{{.ID}}/driver" class="chips" style="gap:6px">
       <input type="text" name="driver" value="{{.Driver}}" placeholder="Who drove?" list="drivers" style="width:9em" aria-label="Driver">
@@ -45,7 +61,27 @@
     </form>
     <a class="btn" href="/trips">All drives</a>
   </div>
+  {{end}}
 </div>
+
+{{if $.TripSections}}
+<div class="card flush" style="margin-bottom:16px">
+  <h2 class="card-title">Sections <span class="muted">parts of this drive you recorded</span></h2>
+  <div class="sec-list">
+    {{range $i, $s := $.TripSections}}
+    <a class="sec-item" href="/sections/{{.ID}}">
+      <div class="tmeta"><b>{{if .Name}}{{.Name}}{{else}}Section {{inc $i}}{{end}}</b><span class="num">{{clock .Start}}{{if .Open}} · recording{{else}} – {{clock .End}}{{end}}</span></div>
+      {{with .Trip}}<div class="trip-nums">
+        <div><b class="num">{{printf "%.0f" .MaxSpeedKmh}}<small>km/h</small></b><span>Top</span></div>
+        <div><b class="num">{{if .MaxLatG}}{{printf "%.2f" .MaxLatG}}<small>g</small>{{else}}—{{end}}</b><span>Corner</span></div>
+        <div><b class="num">{{printf "%.1f" .DistanceKm}}<small>km</small></b><span>{{hms .Duration}}</span></div>
+      </div>{{end}}
+      <svg class="i" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+    </a>
+    {{end}}
+  </div>
+</div>
+{{end}}
 
 <div class="card circuit-card" id="circuit-card">
   <h2 class="bracket-title">Drive info</h2>
@@ -205,7 +241,10 @@
 {{end}}
 
 {{define "live-drive"}}
-<div id="live-drive" hx-get="/live" hx-trigger="every {{if .Live}}3s{{else}}30s{{end}}" hx-swap="outerHTML">
+<div id="live-drive" hx-get="/live" hx-trigger="every {{if or .Live .Recording}}3s{{else}}30s{{end}}" hx-swap="outerHTML">
+  {{with .Recording}}{{if not $.Live}}
+  <div class="card rec-card" style="margin-bottom:16px">{{template "rec-bar" .}}</div>
+  {{end}}{{end}}
   {{with .Live}}
   <div class="card live-card" style="margin-bottom:16px">
     <h2 class="card-title">Driving now <span class="pill green"><span class="dot green pulse"></span>Live · {{hms .Duration}}</span></h2>
@@ -215,10 +254,22 @@
       <div><div class="muted">Peak power</div><div class="big">{{nf "l-pwr" .PeakPowerKW 0}}<span class="unit">kW</span></div></div>
       <div><div class="muted">Distance</div><div class="big">{{nf "l-dist" .DistanceKm 1}}<span class="unit">km</span></div></div>
     </div>
+    <div class="divider"></div>
+    {{with $.Recording}}{{template "rec-bar" .}}{{else}}
+    <div class="rec-bar"><div class="tmeta"><b>Record a section</b><span>Start at the good part, stop when you're done</span></div>
+      <button class="btn rec" hx-post="/sections/start" hx-target="#live-drive" hx-swap="outerHTML"><span class="rec-dot"></span>Record</button></div>
+    {{end}}
     {{with $.NowPlaying}}<div class="divider"></div>{{template "now-playing" .}}{{end}}
   </div>
   {{end}}
 </div>
+{{end}}
+
+{{define "rec-bar"}}
+<div class="rec-bar on"><div class="tmeta"><span class="eyebrow red"><span class="rec-dot pulse"></span> Recording section</span>
+  <b class="timer">{{hms (since .Start)}}</b></div>
+  <a class="btn" href="/sections/{{.ID}}">View</a>
+  <button class="btn rec" hx-post="/sections/stop" hx-target="#live-drive" hx-swap="outerHTML"><span class="rec-stop"></span>Stop</button></div>
 {{end}}
 
 {{define "trip-list"}}

@@ -29,6 +29,7 @@ func (s *Server) tripsPage(w http.ResponseWriter, r *http.Request) {
 	d.TripSongs = s.topSongs(r.Context(), d.Trips)
 	d.Live = s.liveTrip(r)
 	d.NowPlaying = s.nowPlaying(r.Context())
+	d.Recording = s.recording(r.Context(), d.Live)
 	s.render(w, "index.html", d)
 }
 
@@ -57,12 +58,25 @@ func (s *Server) tripPage(w http.ResponseWriter, r *http.Request) {
 	d.Page = "trip"
 	d.Trip = t
 	d.Drivers, _ = s.Store.Drivers(r.Context())
-	path, _ := json.Marshal(t.Path)
-	d.TripPath = template.JS(path)
 	var filled []trips.Sample
 	if t.Source == "telemetry" {
 		samples, _ := s.Store.TripSamples(r.Context(), s.Poller.VIN(), t.Start, t.End)
 		filled = trips.Fill(samples)
+	}
+	s.tripDetail(r.Context(), &d, filled)
+	all, _ := s.Store.TripStats(r.Context(), s.Poller.VIN())
+	d.Board = tripBoard(t, all, circuitPoints(t.Path, filled), "/trips/")
+	d.TripSections, _ = s.Store.Sections(r.Context(), s.Poller.VIN(), t.Start, t.End)
+	s.render(w, "index.html", d)
+}
+
+// tripDetail fills in the route, charts, g-forces and soundtrack for d.Trip
+// from its 1 Hz samples (none for polled drives).
+func (s *Server) tripDetail(ctx context.Context, d *pageData, filled []trips.Sample) {
+	t := d.Trip
+	path, _ := json.Marshal(t.Path)
+	d.TripPath = template.JS(path)
+	if len(filled) > 0 {
 		pts := make([]store.Point, 0, len(filled))
 		for _, x := range filled {
 			pts = append(pts, store.Point{Time: x.Time, SpeedKmh: x.SpeedKmh, PowerKW: x.PowerKW})
@@ -73,16 +87,21 @@ func (s *Server) tripPage(w http.ResponseWriter, r *http.Request) {
 		d.TripPower = buildChart(pts, t.Start, t.End, s.Cfg.Location, "", nil, nil,
 			series{Name: "Power kW", Class: "s-inside", Value: func(p store.Point) *float64 { return p.PowerKW }})
 		d.TripG = frictionCircle(filled)
-		d.TripTracks, d.TopSpeedTrack = s.soundtrack(r.Context(), t, filled)
+		d.TripTracks, d.TopSpeedTrack = s.soundtrack(ctx, t, filled)
 	}
-	all, _ := s.Store.TripStats(r.Context(), s.Poller.VIN())
-	d.Board = tripBoard(t, all, circuitPoints(t.Path, filled))
-	s.render(w, "index.html", d)
 }
 
 // livePartial is polled every few seconds by the dashboard while a drive is under way.
 func (s *Server) livePartial(w http.ResponseWriter, r *http.Request) {
-	s.render(w, "live-drive", pageData{Live: s.liveTrip(r), NowPlaying: s.nowPlaying(r.Context())})
+	s.render(w, "live-drive", s.liveData(r))
+}
+
+// liveData is what the live-drive card shows: the drive under way, what's
+// playing, and the section being recorded.
+func (s *Server) liveData(r *http.Request) pageData {
+	d := pageData{Live: s.liveTrip(r), NowPlaying: s.nowPlaying(r.Context())}
+	d.Recording = s.recording(r.Context(), d.Live)
+	return d
 }
 
 func (s *Server) liveTrip(r *http.Request) *trips.Trip {

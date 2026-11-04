@@ -150,3 +150,30 @@ func TestRollingRuns(t *testing.T) {
 		t.Errorf("60–100 after lifting = %v, want 2.25s", r)
 	}
 }
+
+func TestSectionCarriesEarlierValues(t *testing.T) {
+	t0 := time.Date(2026, 11, 3, 18, 0, 0, 0, time.UTC)
+	f := func(v float64) *float64 { return &v }
+	raw := []Sample{
+		// gear and power only arrive before the section starts
+		{Time: t0, Gear: "D", SpeedKmh: f(40), PowerKW: f(30), Latitude: f(43.6), Longitude: f(-79.6)},
+	}
+	for i := 1; i <= 60; i++ {
+		raw = append(raw, Sample{Time: t0.Add(time.Duration(i) * time.Second), SpeedKmh: f(40 + float64(i)),
+			Latitude: f(43.6 + float64(i)*0.0002), Longitude: f(-79.6)})
+	}
+	from, to := t0.Add(20*time.Second), t0.Add(50*time.Second)
+	s, ok := Section(raw, from, to)
+	if !ok {
+		t.Fatal("no section")
+	}
+	if !s.Start.Equal(from) || !s.End.Equal(to) || s.MaxSpeedKmh != 90 {
+		t.Errorf("start %v end %v top %.0f", s.Start, s.End, s.MaxSpeedKmh)
+	}
+	if s.PeakPowerKW != 30 || s.Moving == 0 {
+		t.Errorf("earlier gear/power weren't carried in: power %.0f, moving %s", s.PeakPowerKW, s.Moving)
+	}
+	if _, ok := Section(raw, t0.Add(time.Hour), t0.Add(2*time.Hour)); ok {
+		t.Error("a section with no data should not be ok")
+	}
+}

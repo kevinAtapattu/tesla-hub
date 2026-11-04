@@ -48,7 +48,9 @@ func TestTemplatesRender(t *testing.T) {
 		la, lo, v := lat+float64(i)*0.001, lon+float64(i%7)*0.001, kmh+float64(i)*3
 		samples = append(samples, trips.Sample{Time: trip.Start.Add(time.Duration(i) * time.Second), Latitude: &la, Longitude: &lo, SpeedKmh: &v})
 	}
-	pages[1].Board = tripBoard(pages[1].Trip, pages[1].Trips, circuitPoints(nil, samples))
+	pages[1].Board = tripBoard(pages[1].Trip, pages[1].Trips, circuitPoints(nil, samples), "/trips/")
+	pages[1].TripSections = []store.Section{{ID: 1, Name: "Twisties", Start: trip.Start, End: trip.End, Trip: &trip}, {ID: 2, Start: trip.End}}
+	pages[1].Recording = &Recording{ID: 2, Start: time.Now().Add(-90 * time.Second)}
 	pages[1].AlertsOn, pages[1].AlertsNote = true, "Test sent."
 	pages[1].Alerts = alerts.Settings{Mode: alerts.Next, LastAt: time.Now()}
 	for i, d := range pages {
@@ -57,6 +59,14 @@ func TestTemplatesRender(t *testing.T) {
 			var sb strings.Builder
 			if err := tmpl.ExecuteTemplate(&sb, "index.html", d); err != nil {
 				t.Fatalf("data %d page %s: %v", i, page, err)
+			}
+		}
+		if i == 1 { // the same trip page, shown as a section
+			sec := d
+			sec.Page, sec.Section, sec.ParentTrip = "trip", &pages[1].TripSections[1], pages[1].Trip
+			var sb strings.Builder
+			if err := tmpl.ExecuteTemplate(&sb, "index.html", sec); err != nil {
+				t.Fatalf("section page: %v", err)
 			}
 		}
 		for _, name := range []string{"departures", "rules", "assistant-log", "telemetry-card", "alerts-card", "live-drive", "trip-list"} {

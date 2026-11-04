@@ -49,14 +49,25 @@ func TestTripBoardRatings(t *testing.T) {
 		all = append(all, store.SavedTrip{ID: int64(i), Source: "telemetry", Trip: trips.Trip{
 			MaxSpeedKmh: float64(90 + i*5), MaxAccelG: float64(i) / 20, MaxBrakeG: .3, MaxLatG: .3, PeakPowerKW: 100, ZeroTo100: &zt}})
 	}
-	b := tripBoard(&all[9], all, nil) // the fastest drive
+	b := tripBoard(&all[9], all, nil, "/trips/") // the fastest drive
 	if b.Number != 10 || b.Ratings[0].Score != 5 {
 		t.Errorf("number %d, launch score %d", b.Number, b.Ratings[0].Score)
 	}
 	if b.Ranks[0].Pos != 1 || b.Ranks[0].Of != 10 || b.Ranks[1].Label != "0–100" || b.Ranks[1].Pos != 1 {
 		t.Errorf("ranks %+v", b.Ranks[:2])
 	}
-	if b = tripBoard(&all[0], all, nil); b.Ranks[0].Pos != 10 || b.Ratings[0].Score != 1 {
+	if b = tripBoard(&all[0], all, nil, "/trips/"); b.Ranks[0].Pos != 10 || b.Ratings[0].Score != 1 {
 		t.Errorf("slowest: pos %d, launch score %d", b.Ranks[0].Pos, b.Ratings[0].Score)
+	}
+}
+
+func TestSectionSentence(t *testing.T) {
+	zt := 5400 * time.Millisecond
+	got := sectionSentence(&store.Section{Trip: &trips.Trip{DistanceKm: 6.34, Duration: 8 * time.Minute, MaxSpeedKmh: 112, ZeroTo100: &zt, MaxLatG: .61}})
+	if want := "Saved: 6.3 km in 8 minutes, top speed 112 km/h, 0 to 100 in 5.4 seconds, 0.61 g cornering."; got != want {
+		t.Errorf("got %q", got)
+	}
+	if got := sectionSentence(&store.Section{}); got == "" {
+		t.Error("empty section needs a reply")
 	}
 }

@@ -177,3 +177,18 @@ CREATE TABLE IF NOT EXISTS media_art (
     looked_at  timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (title, artist)
 );
+
+-- Sections: part of a drive the owner recorded on purpose ("record from now"
+-- until "stop"), e.g. a twisty road without the drive there and back. end_at
+-- is NULL while recording; only one can be open per car. summary is the
+-- section's stats, filled in when it stops.
+CREATE TABLE IF NOT EXISTS sections (
+    id        bigserial PRIMARY KEY,
+    vin       text NOT NULL,
+    name      text NOT NULL DEFAULT '',
+    start_at  timestamptz NOT NULL,
+    end_at    timestamptz,
+    summary   jsonb
+);
+CREATE UNIQUE INDEX IF NOT EXISTS sections_one_open ON sections (vin) WHERE end_at IS NULL;
+CREATE INDEX IF NOT EXISTS sections_vin_start ON sections (vin, start_at);
