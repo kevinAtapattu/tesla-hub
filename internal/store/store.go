@@ -748,37 +748,44 @@ func (s *Store) Drivers(ctx context.Context) ([]string, error) {
 // ArtKey is a song to find cover art for.
 type ArtKey struct{ Title, Artist string }
 
-// MediaArt returns the cached cover URLs for the keys it has looked up before;
-// a found-nothing lookup comes back as "".
-func (s *Store) MediaArt(ctx context.Context, keys []ArtKey) (map[ArtKey]string, error) {
+// Song is what the iTunes search found for a track: a cover and a 30-second
+// preview clip, each "" when there's none.
+type Song struct{ Art, Preview string }
+
+// MediaArt returns the cached lookups for the keys it has seen before; a
+// found-nothing lookup comes back empty. Songs cached before previews were
+// stored are left out so they get looked up again.
+func (s *Store) MediaArt(ctx context.Context, keys []ArtKey) (map[ArtKey]Song, error) {
 	titles, artists := make([]string, len(keys)), make([]string, len(keys))
 	for i, k := range keys {
 		titles[i], artists[i] = k.Title, k.Artist
 	}
 	rows, err := s.db.Query(ctx, `
-		SELECT a.title, a.artist, a.url FROM media_art a
-		JOIN unnest($1::text[], $2::text[]) AS k(title, artist) ON a.title = k.title AND a.artist = k.artist`, titles, artists)
+		SELECT a.title, a.artist, a.url, a.preview FROM media_art a
+		JOIN unnest($1::text[], $2::text[]) AS k(title, artist) ON a.title = k.title AND a.artist = k.artist
+		WHERE a.preview IS NOT NULL`, titles, artists)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	out := map[ArtKey]string{}
+	out := map[ArtKey]Song{}
 	for rows.Next() {
 		var k ArtKey
-		var url string
-		if err := rows.Scan(&k.Title, &k.Artist, &url); err != nil {
+		var v Song
+		if err := rows.Scan(&k.Title, &k.Artist, &v.Art, &v.Preview); err != nil {
 			return nil, err
 		}
-		out[k] = url
+		out[k] = v
 	}
 	return out, rows.Err()
 }
 
-// SaveMediaArt caches a lookup; url is "" when nothing was found.
-func (s *Store) SaveMediaArt(ctx context.Context, k ArtKey, url string) error {
+// SaveMediaArt caches a lookup; the fields are "" when nothing was found.
+func (s *Store) SaveMediaArt(ctx context.Context, k ArtKey, v Song) error {
 	_, err := s.db.Exec(ctx, `
-		INSERT INTO media_art (title, artist, url) VALUES ($1, $2, $3)
-		ON CONFLICT (title, artist) DO UPDATE SET url = EXCLUDED.url, looked_at = now()`, k.Title, k.Artist, url)
+		INSERT INTO media_art (title, artist, url, preview) VALUES ($1, $2, $3, $4)
+		ON CONFLICT (title, artist) DO UPDATE SET url = EXCLUDED.url, preview = EXCLUDED.preview, looked_at = now()`,
+		k.Title, k.Artist, v.Art, v.Preview)
 	return err
 }
 

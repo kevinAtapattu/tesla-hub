@@ -95,7 +95,7 @@
       <div class="spec"><span>Average</span><b>{{nf "c-avg" .AvgSpeedKmh 0}}<small>km/h</small></b></div>
       <div class="spec wide song"><span>Top-speed song</span>
         {{with $.TopSpeedTrack}}
-        <div class="song-at">{{template "art" .}}
+        <div class="song-at"{{template "play" .}}>{{template "art" .}}
           <p>Was listening to <b>{{if .Title}}{{.Title}}{{else}}{{.Station}}{{end}}</b>{{with .Artist}} by {{.}}{{end}} at <b class="speed timer">{{printf "%.0f" $.Trip.MaxSpeedKmh}}<small>km/h</small></b>{{with .Source}} <span class="via">via {{.}}</span>{{end}}</p>
         </div>
         {{else}}<p class="song-none">{{if $.TripTracks}}Nothing was playing at top speed{{else}}Shows up for drives once now-playing is on{{end}}</p>{{end}}
@@ -176,7 +176,7 @@
     {{if $.TripTracks}}
     <div class="tracks">
       {{range $.TripTracks}}
-      <div class="track">{{template "art" .}}<div class="tmeta"><b>{{if .Title}}{{.Title}}{{else}}{{.Station}}{{end}}</b>
+      <div class="track"{{template "play" .}}>{{template "art" .}}<div class="tmeta"><b>{{if .Title}}{{.Title}}{{else}}{{.Station}}{{end}}</b>
         <span>{{if .Artist}}{{.Artist}}{{else if .Station}}{{.Station}}{{else}}{{.Source}}{{end}}</span></div>
         <span class="muted num">{{clock .Start}}</span></div>
       {{end}}
@@ -298,7 +298,7 @@
     <div class="trip-when">
       <div class="trip-title">{{partOfDay .Start}}{{if .Driver}} <span class="pill driver">{{.Driver}}</span>{{end}}</div>
       <div class="muted num">{{local .Start}} · {{hms .Duration}}</div>
-      {{$top := .MaxSpeedKmh}}{{with index $.TripSongs .ID}}<div class="top-song">{{template "art" .}}<span>Was listening to <b>{{if .Title}}{{.Title}}{{else}}{{.Station}}{{end}}</b>{{with .Artist}} · {{.}}{{end}} at <b>{{printf "%.0f" $top}} km/h</b></span></div>{{end}}
+      {{$top := .MaxSpeedKmh}}{{with index $.TripSongs .ID}}<div class="top-song"{{template "play" .}}>{{template "art" .}}<span>Was listening to <b>{{if .Title}}{{.Title}}{{else}}{{.Station}}{{end}}</b>{{with .Artist}} · {{.}}{{end}} at <b>{{printf "%.0f" $top}} km/h</b></span></div>{{end}}
     </div>
     <div class="trip-nums">
       <div><b class="num">{{printf "%.0f" .MaxSpeedKmh}}<small>km/h</small></b><span>Top speed</span></div>
@@ -357,7 +357,9 @@
 </script>
 {{end}}
 
-{{define "art"}}<span class="art" aria-hidden="true">{{with .Art}}<img src="{{.}}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">{{end}}<svg class="i" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span>{{end}}
+{{define "art"}}<span class="art" aria-hidden="true">{{with .Art}}<img src="{{.}}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">{{end}}<svg class="i" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>{{if .Preview}}<span class="play"><svg class="i on-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg><svg class="i on-pause" viewBox="0 0 24 24"><path d="M7 5h3v14H7zM14 5h3v14h-3z"/></svg></span>{{end}}</span>{{end}}
+{{/* Tap a song to hear Apple's 30-second preview; the script is in index.html. */}}
+{{define "play"}}{{with .Preview}} data-preview="{{.}}" role="button" tabindex="0" aria-pressed="false"{{end}}{{if .Preview}} aria-label="Play a preview of {{.Title}}"{{end}}{{end}}
 
 {{define "now-playing"}}
 <div class="track now">{{template "art" .}}<div class="tmeta"><span class="eyebrow">{{if eq .Status "Paused"}}Paused{{else}}Now playing{{end}}{{with .Source}} · {{.}}{{end}}</span>

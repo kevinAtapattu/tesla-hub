@@ -177,6 +177,8 @@ CREATE TABLE IF NOT EXISTS media_art (
     looked_at  timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (title, artist)
 );
+-- 30-second preview clip; NULL for songs cached before previews were looked up
+ALTER TABLE media_art ADD COLUMN IF NOT EXISTS preview text;
 
 -- Sections: part of a drive the owner recorded on purpose ("record from now"
 -- until "stop"), e.g. a twisty road without the drive there and back. end_at

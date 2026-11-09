@@ -175,6 +175,7 @@ func (s *Server) racePage(w http.ResponseWriter, r *http.Request) {
 // Track is a song or station that played in the car.
 type Track struct {
 	Art                  string // cover image URL, looked up by title and artist; "" when unknown
+	Preview              string // 30-second clip from the same lookup; "" when there's none
 	Title, Artist, Album string
 	Station, Source      string
 	Start                time.Time

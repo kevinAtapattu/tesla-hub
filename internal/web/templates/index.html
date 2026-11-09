@@ -174,6 +174,13 @@
   .art { width: 40px; height: 40px; border-radius: 10px; flex: none; display: grid; place-items: center; color: var(--muted);
     background: linear-gradient(135deg, var(--surface-2), var(--track)); }
   .track.now .art { width: 52px; height: 52px; border-radius: 12px; color: var(--text); background: linear-gradient(135deg, #ff453a, #7c3aed); }
+  [data-preview] { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  .art .play { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,.35); color: #fff; }
+  .art .play svg.i { width: 45%; height: 45%; max-width: 22px; fill: currentColor; stroke: none; }
+  .art .play .on-pause, .playing .art .play .on-play { display: none; }
+  .playing .art .play .on-pause { display: block; }
+  .art .play::after { content: ""; position: absolute; left: 0; bottom: 0; height: 3px; width: calc(var(--p, 0) * 100%); background: var(--green); }
+  [data-preview]:focus-visible { outline: 2px solid var(--green); outline-offset: 3px; border-radius: 8px; }
   .tmeta { flex: 1; min-width: 0; display: grid; }
   .tmeta b, .tmeta span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .tmeta b { font-weight: 600; } .tmeta span { font-size: 13px; color: var(--muted); }
@@ -633,6 +640,48 @@
     var i = document.getElementById(id), v = Math.min(+i.max, Math.max(+i.min, (+i.value || 21) + d));
     i.value = v.toFixed(1).replace(/\.0$/, "");
   }
+</script>
+<script>
+  // Song previews: tapping anything with data-preview plays Apple's 30-second
+  // clip, tapping again stops it. One clip at a time; it also stops the card's
+  // own link from opening, so a song inside a drive card can be played in place.
+  (function () {
+    var audio = new Audio(), on = null;
+    function mark(el, playing) {
+      if (!el) return;
+      el.classList.toggle("playing", playing);
+      el.setAttribute("aria-pressed", playing);
+      if (!playing) el.style.removeProperty("--p");
+    }
+    function stop() { audio.pause(); mark(on, false); on = null; }
+    function toggle(el) {
+      if (on === el) { stop(); return; }
+      stop();
+      on = el;
+      audio.src = el.getAttribute("data-preview");
+      audio.play().then(function () { mark(el, true); }, stop);
+    }
+    audio.addEventListener("timeupdate", function () {
+      if (on && audio.duration) on.style.setProperty("--p", (audio.currentTime / audio.duration).toFixed(3));
+    });
+    audio.addEventListener("ended", stop);
+    document.addEventListener("click", function (e) {
+      var el = e.target.closest && e.target.closest("[data-preview]");
+      if (!el) return;
+      e.preventDefault(); e.stopPropagation();
+      toggle(el);
+    }, true);
+    document.addEventListener("keydown", function (e) {
+      var el = e.target.closest && e.target.closest("[data-preview]");
+      if (el && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); e.stopPropagation(); toggle(el); }
+    }, true);
+    // htmx refreshes replace the cards; keep the playing one highlighted.
+    document.addEventListener("htmx:afterSwap", function () {
+      if (!on || document.contains(on)) return;
+      var src = audio.src, el = [].find.call(document.querySelectorAll("[data-preview]"), function (x) { return x.getAttribute("data-preview") === src; });
+      on = el || null; mark(on, true);
+    });
+  })();
 </script>
 <script>
   // Rolling numbers: each digit is a 0-9 strip that slides to its value. The
