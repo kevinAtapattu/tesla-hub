@@ -40,7 +40,15 @@ type Status struct {
 }
 
 func New(cfg *config.Config, fleet *tesla.Client, st *store.Store) *Poller {
-	return &Poller{Cfg: cfg, Fleet: fleet, Store: st, nudge: make(chan struct{}, 1), vin: cfg.VIN}
+	p := &Poller{Cfg: cfg, Fleet: fleet, Store: st, nudge: make(chan struct{}, 1), vin: cfg.VIN}
+	if p.vin == "" {
+		// Pick up the car from the last snapshot, so the dashboard works after a
+		// restart even while polling is paused (e.g. the monthly budget is spent).
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		p.vin, p.name, _ = st.LastVehicle(ctx)
+		cancel()
+	}
+	return p
 }
 
 // Nudge asks for a check right away (never wakes the car).

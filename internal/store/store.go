@@ -89,6 +89,18 @@ func (s *Store) InsertSnapshot(ctx context.Context, v *tesla.Snapshot) error {
 }
 
 // LatestSnapshot returns the most recent sample for vin, or nil if there is none.
+// LastVehicle is the VIN and name of the most recently recorded car, or "" if
+// there's none yet.
+func (s *Store) LastVehicle(ctx context.Context) (vin, name string, err error) {
+	err = s.db.QueryRow(ctx, `
+		SELECT vin, coalesce(raw#>>'{vehicle_state,vehicle_name}', '') FROM vehicle_states
+		ORDER BY time DESC LIMIT 1`).Scan(&vin, &name)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", "", nil
+	}
+	return vin, name, err
+}
+
 func (s *Store) LatestSnapshot(ctx context.Context, vin string) (*tesla.Snapshot, error) {
 	v := &tesla.Snapshot{VIN: vin}
 	var charging, shift, version *string
