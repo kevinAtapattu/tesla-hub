@@ -33,6 +33,19 @@ import (
 //go:embed templates/*.html
 var templateFS embed.FS
 
+// The home-screen icon and web app manifest. They skip the password because
+// phones fetch them without the dashboard's credentials.
+//
+//go:embed static
+var staticFS embed.FS
+
+var staticFiles = map[string]string{
+	"/apple-touch-icon.png": "static/apple-touch-icon.png",
+	"/icon-512.png":         "static/icon-512.png",
+	"/favicon.png":          "static/favicon.png",
+	"/manifest.webmanifest": "static/manifest.webmanifest",
+}
+
 type Server struct {
 	Cfg       *config.Config
 	Auth      *tesla.Auth
@@ -94,6 +107,12 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /telemetry/check", s.checkTelemetry)
 	mux.HandleFunc("POST /alerts/mode", s.setAlertMode)
 	mux.HandleFunc("POST /alerts/test", s.testAlert)
+	for path, file := range staticFiles {
+		mux.HandleFunc("GET "+path, func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Cache-Control", "public, max-age=86400")
+			http.ServeFileFS(w, r, staticFS, file)
+		})
+	}
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("ok")) })
 	return s.basicAuth(mux)
 }
@@ -106,7 +125,7 @@ func (s *Server) basicAuth(next http.Handler) http.Handler {
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, pw, ok := r.BasicAuth()
-		if r.URL.Path == "/auth/callback" || r.URL.Path == "/healthz" || r.URL.Path == "/assistant" || r.URL.Path == "/driver" || r.URL.Path == "/section" ||
+		if r.URL.Path == "/auth/callback" || r.URL.Path == "/healthz" || r.URL.Path == "/assistant" || r.URL.Path == "/driver" || r.URL.Path == "/section" || staticFiles[r.URL.Path] != "" ||
 			(ok && subtle.ConstantTimeCompare([]byte(pw), []byte(s.Cfg.DashboardPassword)) == 1) {
 			next.ServeHTTP(w, r)
 			return
